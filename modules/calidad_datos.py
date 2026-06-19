@@ -16,7 +16,7 @@ def mostrar_calidad_datos():
     if not archivo:
         return
 
-    # ── Configuración de lectura ───────────────────────────────
+    # ── Configuración de lectura ──
     st.subheader("Configuración de lectura")
 
     fila_encabezado = st.number_input(
@@ -61,7 +61,7 @@ def mostrar_calidad_datos():
     c3.metric("Únicos",                contar_unicos(df, columna))
 
     c4, c5, c6 = st.columns(3)
-    c4.metric("Longitud > 5",          longitud_mayor(df, columna, 5))
+    c4.metric("Longitud > 10",          longitud_mayor(df, columna, 10))
     c5.metric("Contiene números",      contiene_numeros(df, columna))
     c6.metric("Contiene letras",       contiene_letras(df, columna))
 
