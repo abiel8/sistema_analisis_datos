@@ -1,6 +1,6 @@
 import streamlit as st
 
-#from modules.dashboard import mostrar_dashboard
+from modules.dashboard import mostrar_dashboard
 from modules.calidad_datos import mostrar_calidad_datos
 #from modules.perfilado import mostrar_perfilado
 from modules.etl import mostrar_etl
@@ -22,16 +22,12 @@ opcion = st.sidebar.selectbox(
     "Seleccione módulo",
 
     [
-      
         "Calidad de Datos",
         "Reglas Dinámicas",
-        "ETL"
+        "ETL",
+        "Dashboard"
     ]
 )
-
-#if opcion == "Dashboard":#
-
-    #mostrar_dashboard()
 
 if opcion == "Calidad de Datos":
 
@@ -52,8 +48,11 @@ elif opcion == "ETL":
 #elif opcion == "Datos Maestros":
 
  #   mostrar_datos_maestros()
-    
+
 elif opcion == "Reglas Dinámicas":
 
     mostrar_reglas_dinamicas()
-    
+
+elif opcion == "Dashboard":
+
+    mostrar_dashboard()
