@@ -1,11 +1,11 @@
 import streamlit as st
 
-from modules.dashboard import mostrar_dashboard
+#from modules.dashboard import mostrar_dashboard
 from modules.calidad_datos import mostrar_calidad_datos
-from modules.perfilado import mostrar_perfilado
+#from modules.perfilado import mostrar_perfilado
 from modules.etl import mostrar_etl
-from modules.reportes import mostrar_reportes
-from modules.datos_maestros import mostrar_datos_maestros
+#from modules.reportes import mostrar_reportes
+#from modules.datos_maestros import mostrar_datos_maestros
 from modules.reglas_dinamicas import mostrar_reglas_dinamicas
 
 
