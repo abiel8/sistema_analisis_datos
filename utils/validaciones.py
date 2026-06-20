@@ -1,5 +1,68 @@
 import re
 
+import unicodedata
+
+
+PAISES_LATAM = {
+    "argentina": "AR",
+    "bolivia": "BO",
+    "brasil": "BR",
+    "chile": "CL",
+    "colombia": "CO",
+    "costa rica": "CR",
+    "cuba": "CU",
+    "ecuador": "EC",
+    "el salvador": "SV",
+    "guatemala": "GT",
+    "honduras": "HN",
+    "mexico": "MX",
+    "nicaragua": "NI",
+    "panama": "PA",
+    "paraguay": "PY",
+    "peru": "PE",
+    "puerto rico": "PR",
+    "republica dominicana": "DO",
+    "uruguay": "UY",
+    "venezuela": "VE",
+    "belice": "BZ",
+    "guyana": "GY",
+    "surinam": "SR",
+    "España": "ESP"
+}
+
+
+def _normalizar_texto(texto):
+
+    texto = str(texto).lower()
+
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+
+    return texto
+
+
+def extraer_codigo_pais(texto):
+
+    texto_normalizado = _normalizar_texto(texto)
+
+    # Ordenar por longitud descendente para que "republica dominicana"
+    # se detecte antes que coincidencias parciales más cortas
+    paises_ordenados = sorted(
+        PAISES_LATAM.items(),
+        key=lambda item: len(item[0]),
+        reverse=True
+    )
+
+    for nombre_pais, codigo in paises_ordenados:
+        if nombre_pais in texto_normalizado:
+            return codigo
+
+    return None
+
+
+def columna_a_codigo_pais(df, columna):
+
+    return df[columna].apply(extraer_codigo_pais)
 
 def contar_vacios(df, columna):
 

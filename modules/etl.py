@@ -1,5 +1,9 @@
+import io
+
 import streamlit as st
 import pandas as pd
+
+from utils.validaciones import columna_a_codigo_pais
 
 
 def mostrar_etl():
@@ -28,53 +32,85 @@ def mostrar_etl():
 
     # Vista previa cruda para que el usuario pueda identificar la fila correcta
     with st.expander("Ver archivo crudo (sin procesar)"):
-        if archivo.name.endswith(".csv"):
-            df_crudo = pd.read_csv(archivo, header=None, nrows=15)
-        else:
-            df_crudo = pd.read_excel(archivo, header=None, nrows=15)
-        
-        st.dataframe(df_crudo, use_container_width=True)
-        archivo.seek(0)  # Resetear el puntero tras la vista previa
+        try:
+            if archivo.name.endswith(".csv"):
+                df_crudo = pd.read_csv(archivo, header=None, nrows=15)
+            elif archivo.name.endswith(".xls"):
+                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="xlrd")
+            else:
+                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="openpyxl")
+
+            st.dataframe(df_crudo, use_container_width=True)
+
+        except Exception as e:
+            st.warning(f"No se pudo generar la vista previa cruda: {e}")
+
+        finally:
+            archivo.seek(0)  # Resetear el puntero tras la vista previa
 
     # ── Cargar con el encabezado correcto ─────────────────────
-    if archivo.name.endswith(".csv"):
-        df_original = pd.read_csv(archivo, header=fila_encabezado)
-    else:
-        df_original = pd.read_excel(archivo, header=fila_encabezado)
+    try:
+        if archivo.name.endswith(".csv"):
+            df_original = pd.read_csv(archivo, header=int(fila_encabezado))
+        elif archivo.name.endswith(".xls"):
+            df_original = pd.read_excel(archivo, header=int(fila_encabezado), engine="xlrd")
+        else:
+            df_original = pd.read_excel(archivo, header=int(fila_encabezado), engine="openpyxl")
+
+    except ValueError as e:
+        st.error(
+            "No se pudo leer el archivo con la configuración indicada. "
+            f"Verifique la fila de encabezado. Detalle: {e}"
+        )
+        return
+
+    except ImportError:
+        st.error(
+            "Falta una librería para leer este tipo de archivo. "
+            "Si es un archivo .xls antiguo, instale xlrd con: pip install xlrd"
+        )
+        return
+
+    except Exception as e:
+        st.error(f"Ocurrió un error inesperado al leer el archivo: {e}")
+        return
+
+    if df_original.empty:
+        st.warning("El archivo se leyó correctamente, pero no contiene datos con esta configuración.")
+        return
 
     df = df_original.copy()
 
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
 
-
     st.subheader("Transformaciones")
 
     # ── Limpieza ──────────────────────────────────────────────
-    st.markdown("**Limpieza**")
+   # st.markdown("**Limpieza**")
 
-    col1, col2, col3 = st.columns(3)
+    #col1, col2, col3 = st.columns(3)
 
-    eliminar_vacios = col1.checkbox("Eliminar filas vacías")
-    eliminar_duplicados = col2.checkbox("Eliminar duplicados")
-    eliminar_columnas_vacias = col3.checkbox("Eliminar columnas 100% vacías")
+    #eliminar_vacios = col1.checkbox("Eliminar filas vacías")
+    #eliminar_duplicados = col2.checkbox("Eliminar duplicados")
+    #eliminar_columnas_vacias = col3.checkbox("Eliminar columnas 100% vacías")
 
     # ── Texto ─────────────────────────────────────────────────
     st.markdown("**Texto**")
 
-    col4, col5, col6 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-    convertir_mayusculas = col4.checkbox("Convertir a MAYÚSCULAS")
-    convertir_minusculas = col5.checkbox("Convertir a minúsculas")
-    quitar_espacios     = col6.checkbox("Quitar espacios extremos (strip)")
+    convertir_mayusculas = col1.checkbox("Convertir a MAYÚSCULAS")
+    convertir_minusculas = col2.checkbox("Convertir a minúsculas")
+    quitar_espacios     = col3.checkbox("Quitar espacios extremos (strip)")
 
     # ── Columnas ──────────────────────────────────────────────
     st.markdown("**Columnas**")
 
-    col7, col8 = st.columns(2)
+    col4, col5 = st.columns(2)
 
-    limpiar_nombres = col7.checkbox("Limpiar nombres de columnas")
-    eliminar_cols   = col8.checkbox("Eliminar columnas específicas")
+    limpiar_nombres = col4.checkbox("Limpiar nombres de columnas")
+    eliminar_cols   = col5.checkbox("Eliminar columnas específicas")
 
     columnas_a_eliminar = []
     if eliminar_cols:
@@ -86,16 +122,37 @@ def mostrar_etl():
     # ── Tipos de datos ────────────────────────────────────────
     st.markdown("**Tipos de datos**")
 
-    col9, col10 = st.columns(2)
+    col6, col7 = st.columns(2)
 
-    inferir_tipos  = col9.checkbox("Inferir tipos automáticamente")
-    rellenar_nulos = col10.checkbox("Rellenar nulos con valor personalizado")
+    #inferir_tipos  = col9.checkbox("Inferir tipos automáticamente")
+    rellenar_nulos = col6.checkbox("Rellenar nulos con valor personalizado")
 
     valor_relleno = None
     if rellenar_nulos:
         valor_relleno = st.text_input(
             "Valor para rellenar nulos (ej: 0, N/A, Desconocido)",
             value="N/A"
+        )
+
+    # ── Extracción de país ─────────────────────────────────────
+    st.markdown("**Extracción de país**")
+
+    extraer_pais = st.checkbox("Extraer código de país desde una columna de texto")
+
+    columna_direccion = None
+    nombre_columna_resultado = "pais_codigo"
+
+    if extraer_pais:
+
+        columna_direccion = st.selectbox(
+            "Seleccione la columna que contiene la dirección/país",
+            options=df.columns.tolist(),
+            key="col_direccion_pais"
+        )
+
+        nombre_columna_resultado = st.text_input(
+            "Nombre de la nueva columna",
+            value="pais_codigo"
         )
 
     # ═══════════════════════════════════════════════════════════
@@ -105,17 +162,17 @@ def mostrar_etl():
     filas_antes = len(df)
     cols_antes  = len(df.columns)
 
-    if eliminar_columnas_vacias:
-        df = df.dropna(axis=1, how="all")
+   # if eliminar_columnas_vacias:
+       # df = df.dropna(axis=1, how="all")
 
-    if eliminar_vacios:
-        df = df.dropna()
+    #if eliminar_vacios:
+        #df = df.dropna()
 
-    if eliminar_duplicados:
-        df = df.drop_duplicates()
+    #if eliminar_duplicados:
+        #df = df.drop_duplicates()
 
-    if columnas_a_eliminar:
-        df = df.drop(columns=columnas_a_eliminar, errors="ignore")
+  #  if columnas_a_eliminar:
+   #     df = df.drop(columns=columnas_a_eliminar, errors="ignore")
 
     if limpiar_nombres:
         df.columns = (
@@ -146,13 +203,28 @@ def mostrar_etl():
     if rellenar_nulos and valor_relleno is not None:
         df = df.fillna(valor_relleno)
 
-    if inferir_tipos:
-        df = df.infer_objects()
-        for col in df.select_dtypes(include="object").columns:
-            try:
-                df[col] = pd.to_numeric(df[col])
-            except (ValueError, TypeError):
-                pass  # Si no se puede convertir, se deja como está
+    # if inferir_tipos:
+      #  df = df.infer_objects()
+       # for col in df.select_dtypes(include="object").columns:
+        #    try:
+         #       df[col] = pd.to_numeric(df[col])
+          #  except (ValueError, TypeError):
+           #     pass  # Si no se puede convertir, se deja como está
+
+    if extraer_pais and columna_direccion:
+        try:
+            df[nombre_columna_resultado] = columna_a_codigo_pais(df, columna_direccion)
+
+            no_encontrados = df[nombre_columna_resultado].isna().sum()
+
+            if no_encontrados > 0:
+                st.info(
+                    f"Se generó la columna '{nombre_columna_resultado}'. "
+                    f"{no_encontrados} fila(s) no coincidieron con ningún país conocido."
+                )
+
+        except Exception as e:
+            st.error(f"No se pudo extraer el país: {e}")
 
     # ═══════════════════════════════════════════════════════════
     # Resumen del impacto
@@ -198,7 +270,7 @@ def mostrar_etl():
         use_container_width=True
     )
 
-    buffer = __import__("io").BytesIO()
+    buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False)
 
@@ -209,3 +281,6 @@ def mostrar_etl():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
+    
+    
+    
