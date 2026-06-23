@@ -1,9 +1,44 @@
 import io
+import re
 
 import streamlit as st
 import pandas as pd
 
 from utils.validaciones import columna_a_codigo_pais
+
+
+def _columna_tiene_cero_inicial(serie):
+
+    valores = serie.dropna().astype(str)
+
+    if valores.empty:
+        return False
+
+    patron_cero_inicial = re.compile(r"^0\d+$")
+
+    return valores.apply(lambda v: bool(patron_cero_inicial.match(v.strip()))).any()
+
+
+def _convertir_tipos_preservando_ceros(df):
+
+    columnas_protegidas = []
+
+    for columna in df.columns:
+
+        serie = df[columna]
+
+        if _columna_tiene_cero_inicial(serie):
+            df[columna] = serie.astype(str).str.strip()
+            columnas_protegidas.append(columna)
+            continue
+
+        # Si no tiene ceros iniciales, intentar convertir a número
+        try:
+            df[columna] = pd.to_numeric(serie)
+        except (ValueError, TypeError):
+            pass  # Se deja como texto
+
+    return df, columnas_protegidas
 
 
 def mostrar_etl():
@@ -48,14 +83,14 @@ def mostrar_etl():
         finally:
             archivo.seek(0)  # Resetear el puntero tras la vista previa
 
-    # ── Cargar con el encabezado correcto ─────────────────────
+    # ── Cargar con el encabezado correcto (todo como texto primero) ──
     try:
         if archivo.name.endswith(".csv"):
-            df_original = pd.read_csv(archivo, header=int(fila_encabezado))
+            df_original = pd.read_csv(archivo, header=int(fila_encabezado), dtype=str)
         elif archivo.name.endswith(".xls"):
-            df_original = pd.read_excel(archivo, header=int(fila_encabezado), engine="xlrd")
+            df_original = pd.read_excel(archivo, header=int(fila_encabezado), dtype=str, engine="xlrd")
         else:
-            df_original = pd.read_excel(archivo, header=int(fila_encabezado), engine="openpyxl")
+            df_original = pd.read_excel(archivo, header=int(fila_encabezado), dtype=str, engine="openpyxl")
 
     except ValueError as e:
         st.error(
@@ -81,10 +116,18 @@ def mostrar_etl():
 
     df = df_original.copy()
 
+    df, columnas_protegidas = _convertir_tipos_preservando_ceros(df)
+
+    if columnas_protegidas:
+        st.info(
+            "Se detectaron y protegieron como texto estas columnas con ceros a la izquierda: "
+            f"{', '.join(columnas_protegidas)}"
+        )
+
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
 
-# ── Filtro previo (opcional) ────────────────────────────────
+    # ── Filtro previo (opcional) ────────────────────────────────
     st.subheader("Filtrar antes de transformar")
 
     aplicar_filtro_previo = st.checkbox("Filtrar filas antes de aplicar el ETL")
@@ -117,15 +160,6 @@ def mostrar_etl():
 
     st.subheader("Transformaciones")
 
-    # ── Limpieza ──────────────────────────────────────────────
-   # st.markdown("**Limpieza**")
-
-    #col1, col2, col3 = st.columns(3)
-
-    #eliminar_vacios = col1.checkbox("Eliminar filas vacías")
-    #eliminar_duplicados = col2.checkbox("Eliminar duplicados")
-    #eliminar_columnas_vacias = col3.checkbox("Eliminar columnas 100% vacías")
-
     # ── Texto ─────────────────────────────────────────────────
     st.markdown("**Texto**")
 
@@ -138,25 +172,12 @@ def mostrar_etl():
     # ── Columnas ──────────────────────────────────────────────
     st.markdown("**Columnas**")
 
-    col4, col5 = st.columns(2)
-
-    limpiar_nombres = col4.checkbox("Limpiar nombres de columnas")
-    eliminar_cols   = col5.checkbox("Eliminar columnas específicas")
-
-    columnas_a_eliminar = []
-    if eliminar_cols:
-        columnas_a_eliminar = st.multiselect(
-            "Seleccione columnas a eliminar",
-            options=df.columns.tolist()
-        )
+    limpiar_nombres = st.checkbox("Limpiar nombres de columnas")
 
     # ── Tipos de datos ────────────────────────────────────────
     st.markdown("**Tipos de datos**")
 
-    col6, col7 = st.columns(2)
-
-    #inferir_tipos  = col9.checkbox("Inferir tipos automáticamente")
-    rellenar_nulos = col6.checkbox("Rellenar nulos con valor personalizado")
+    rellenar_nulos = st.checkbox("Rellenar nulos con valor personalizado")
 
     valor_relleno = None
     if rellenar_nulos:
@@ -193,18 +214,6 @@ def mostrar_etl():
     filas_antes = len(df)
     cols_antes  = len(df.columns)
 
-   # if eliminar_columnas_vacias:
-       # df = df.dropna(axis=1, how="all")
-
-    #if eliminar_vacios:
-        #df = df.dropna()
-
-    #if eliminar_duplicados:
-        #df = df.drop_duplicates()
-
-  #  if columnas_a_eliminar:
-   #     df = df.drop(columns=columnas_a_eliminar, errors="ignore")
-
     if limpiar_nombres:
         df.columns = (
             df.columns
@@ -234,14 +243,6 @@ def mostrar_etl():
     if rellenar_nulos and valor_relleno is not None:
         df = df.fillna(valor_relleno)
 
-    # if inferir_tipos:
-      #  df = df.infer_objects()
-       # for col in df.select_dtypes(include="object").columns:
-        #    try:
-         #       df[col] = pd.to_numeric(df[col])
-          #  except (ValueError, TypeError):
-           #     pass  # Si no se puede convertir, se deja como está
-
     if extraer_pais and columna_direccion:
         try:
             df[nombre_columna_resultado] = columna_a_codigo_pais(df, columna_direccion)
@@ -265,24 +266,10 @@ def mostrar_etl():
 
     m1, m2, m3, m4 = st.columns(4)
 
-    m1.metric(
-        "Filas originales",
-        filas_antes
-    )
-    m2.metric(
-        "Filas resultado",
-        len(df),
-        delta=len(df) - filas_antes
-    )
-    m3.metric(
-        "Columnas originales",
-        cols_antes
-    )
-    m4.metric(
-        "Columnas resultado",
-        len(df.columns),
-        delta=len(df.columns) - cols_antes
-    )
+    m1.metric("Filas originales", filas_antes)
+    m2.metric("Filas resultado", len(df), delta=len(df) - filas_antes)
+    m3.metric("Columnas originales", cols_antes)
+    m4.metric("Columnas resultado", len(df.columns), delta=len(df.columns) - cols_antes)
 
     # ═══════════════════════════════════════════════════════════
     # Resultado y descarga
@@ -312,6 +299,3 @@ def mostrar_etl():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
-    
-    
-    

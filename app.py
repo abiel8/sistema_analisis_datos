@@ -6,7 +6,7 @@ from modules.calidad_datos import mostrar_calidad_datos
 from modules.etl import mostrar_etl
 #from modules.reportes import mostrar_reportes
 #from modules.datos_maestros import mostrar_datos_maestros
-from modules.reglas_dinamicas import mostrar_reglas_dinamicas
+#from modules.reglas_dinamicas import mostrar_reglas_dinamicas
 
 
 st.set_page_config(
@@ -23,7 +23,6 @@ opcion = st.sidebar.selectbox(
 
     [
         "Calidad de Datos",
-        "Reglas Dinámicas",
         "ETL",
         "Dashboard"
     ]
@@ -49,9 +48,9 @@ elif opcion == "ETL":
 
  #   mostrar_datos_maestros()
 
-elif opcion == "Reglas Dinámicas":
+#elif opcion == "Reglas Dinámicas":
 
-    mostrar_reglas_dinamicas()
+ #   mostrar_reglas_dinamicas()
 
 elif opcion == "Dashboard":
 

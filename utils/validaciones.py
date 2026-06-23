@@ -2,37 +2,55 @@ import re
 import unicodedata
 
 
-PAISES_LATAM = {
-    "argentina": "AR",
-    "bolivia": "BO",
-    "brasil": "BR",
+PAISES = {
+    "alemania": "DE",
+    "canada": "CA",
+    "china": "CN",
     "chile": "CL",
     "colombia": "CO",
+    "corea del sur": "KR",
     "costa rica": "CR",
-    "cuba": "CU",
+    "dinamarca": "DK",
     "ecuador": "EC",
     "el salvador": "SV",
-    "guatemala": "GT",
-    "honduras": "HN",
-    "mexico": "MX",
-    "nicaragua": "NI",
-    "panama": "PA",
-    "paraguay": "PY",
-    "peru": "PE",
-    "puerto rico": "PR",
-    "republica dominicana": "DO",
-    "uruguay": "UY",
-    "venezuela": "VE",
-    "belice": "BZ",
-    "guyana": "GY",
-    "surinam": "SR",
-    "espana": "ESP",
+    "espana": "ES",
     "estados unidos": "US",
     "usa": "US",
     "u.s.a.": "US",
+    "u. s. a.": "US",
     "united states": "US",
-    
+    "francia": "FR",
+    "guatemala": "GT",
+    "honduras": "HN",
+    "islas virgenes britanicas": "VG",
+    "british virgin islands": "VG",
+    "mexico": "MX",
+    "noruega": "NO",
+    "paises bajos": "NL",
+    "netherlands": "NL",
+    "panama": "PA",
+    "peru": "PE",
+    "puerto rico": "PR",
+    "reino unido": "GB",
+    "uk": "GB",
+    "united kingdom": "GB",
+    "gran bretana": "GB",
+    "romania": "RO",
+    "suecia": "SE",
+    "suiza": "CH",
+    "switzerland": "CH",
+    "uruguay": "UY",
+    "germany": "DE",
+    "france": "FR",
+    "norway": "NO",
+    "sweden": "SE",
+    "denmark": "DK",
+    "republic of korea": "KR",
+    "tegucigalpa": "HN",
+    "san pedro sula": "HN",
+    "sps": "HN",
 }
+
 
 
 def _normalizar_texto(texto):
@@ -52,7 +70,7 @@ def extraer_codigo_pais(texto):
     # Ordenar por longitud descendente para que "republica dominicana"
     # se detecte antes que coincidencias parciales más cortas
     paises_ordenados = sorted(
-        PAISES_LATAM.items(),
+        PAISES.items(),
         key=lambda item: len(item[0]),
         reverse=True
     )

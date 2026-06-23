@@ -1,3 +1,5 @@
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -5,8 +7,47 @@ from utils.graficos import (
     grafico_barras,
     grafico_lineas,
     grafico_pastel,
-    grafico_dispersion
+    grafico_dispersion,
+    calcular_calidad_columna,
+    calcular_calidad_archivo,
+    grafico_calidad_columna,
+    grafico_calidad_archivo
 )
+
+
+def _columna_tiene_cero_inicial(serie):
+
+    valores = serie.dropna().astype(str)
+
+    if valores.empty:
+        return False
+
+    patron_cero_inicial = re.compile(r"^0\d+$")
+
+    return valores.apply(lambda v: bool(patron_cero_inicial.match(v.strip()))).any()
+
+
+def _convertir_tipos_preservando_ceros(df):
+
+    columnas_protegidas = []
+
+    for columna in df.columns:
+
+        serie = df[columna]
+
+        if _columna_tiene_cero_inicial(serie):
+            df[columna] = serie.astype(str).str.strip()
+            columnas_protegidas.append(columna)
+            continue
+
+        # Si no tiene ceros iniciales, intentar convertir a número
+        try:
+            convertido = pd.to_numeric(serie)
+            df[columna] = convertido
+        except (ValueError, TypeError):
+            pass  # Se deja como texto
+
+    return df, columnas_protegidas
 
 
 def mostrar_dashboard():
@@ -49,13 +90,15 @@ def mostrar_dashboard():
             df = pd.read_csv(
                 archivo,
                 header=int(fila_encabezado),
-                skiprows=filas_a_saltar
+                skiprows=filas_a_saltar,
+                dtype=str
             )
         elif archivo.name.endswith(".xls"):
             df = pd.read_excel(
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                dtype=str,
                 engine="xlrd"
             )
         else:
@@ -63,6 +106,7 @@ def mostrar_dashboard():
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                dtype=str,
                 engine="openpyxl"
             )
 
@@ -88,21 +132,117 @@ def mostrar_dashboard():
         st.warning("El archivo se leyó correctamente, pero no contiene datos con esta configuración.")
         return
 
+    df, columnas_protegidas = _convertir_tipos_preservando_ceros(df)
+
+    if columnas_protegidas:
+        st.info(
+            "Se detectaron y protegieron como texto estas columnas con ceros a la izquierda: "
+            f"{', '.join(columnas_protegidas)}"
+        )
+
     columnas = df.columns.tolist()
     columnas_numericas = df.select_dtypes(include="number").columns.tolist()
 
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
 
-    # ── Configuración del dashboard ─────────────────────────────
-    st.subheader("Configurar gráficos")
+    # (el resto del módulo sigue exactamente igual...)
+
+    # ═══════════════════════════════════════════════════════════
+    # Sección: Calidad de datos
+    # ═══════════════════════════════════════════════════════════
+
+    st.subheader("Calidad de datos")
+
+    alcance = st.radio(
+        "¿Qué quiere analizar?",
+        options=["Una columna específica", "Todo el archivo"],
+        horizontal=True,
+        key="alcance_calidad"
+    )
+
+    n_caracteres = st.number_input(
+        "Umbral de longitud mínima (para la condición 'Longitud < N')",
+        min_value=1,
+        max_value=200,
+        value=5,
+        step=1,
+        key="n_caracteres_calidad"
+    )
+
+    if alcance == "Una columna específica":
+
+        columna_calidad = st.selectbox(
+            "Seleccione la columna a analizar",
+            options=columnas,
+            key="columna_calidad"
+        )
+
+        try:
+            resultados = calcular_calidad_columna(df, columna_calidad, int(n_caracteres))
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Vacíos", f"{resultados['Vacíos (%)']}%")
+            c2.metric("Duplicados", f"{resultados['Duplicados (%)']}%")
+            c3.metric(f"Longitud < {int(n_caracteres)}", f"{resultados[f'Longitud < {int(n_caracteres)} (%)']}%")
+
+            tipo_grafico_calidad = st.selectbox(
+                "Tipo de gráfico",
+                ["Barras", "Pastel"],
+                key="tipo_grafico_calidad_columna"
+            )
+
+            if tipo_grafico_calidad == "Barras":
+                fig = grafico_calidad_columna(resultados, f"Calidad de '{columna_calidad}'")
+                st.plotly_chart(fig, use_container_width=True)
+
+            else:
+                df_pastel = pd.DataFrame(
+                    list(resultados.items()),
+                    columns=["condicion", "porcentaje"]
+                )
+                fig = grafico_pastel(df_pastel, "condicion", "porcentaje")
+                st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"No se pudo calcular la calidad de la columna: {e}")
+
+    else:  # Todo el archivo
+
+        try:
+            df_calidad = calcular_calidad_archivo(df, int(n_caracteres))
+
+            st.dataframe(df_calidad, use_container_width=True)
+
+            condicion_a_graficar = st.selectbox(
+                "Seleccione qué condición comparar entre columnas",
+                options=[c for c in df_calidad.columns if c != "columna"],
+                key="condicion_calidad_archivo"
+            )
+
+            fig = grafico_calidad_archivo(
+                df_calidad,
+                condicion_a_graficar,
+                f"{condicion_a_graficar} por columna"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"No se pudo calcular la calidad del archivo: {e}")
+
+    # ═══════════════════════════════════════════════════════════
+    # Sección: Gráficos personalizados
+    # ═══════════════════════════════════════════════════════════
+
+    st.subheader("Configurar gráficos personalizados")
 
     num_graficos = st.number_input(
         "¿Cuántos gráficos quiere mostrar?",
         min_value=1,
         max_value=6,
         value=2,
-        step=1
+        step=1,
+        key="num_graficos_personalizados"
     )
 
     configuraciones = []
@@ -157,7 +297,7 @@ def mostrar_dashboard():
                     "valores": col_valores
                 })
 
-    # ── Renderizar la cuadrícula de gráficos ────────────────────
+    # ── Renderizar la cuadrícula de gráficos personalizados ─────
     st.subheader("Resultado")
 
     columnas_por_fila = 2
