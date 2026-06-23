@@ -1,5 +1,4 @@
 import re
-
 import unicodedata
 
 
@@ -27,7 +26,12 @@ PAISES_LATAM = {
     "belice": "BZ",
     "guyana": "GY",
     "surinam": "SR",
-    "España": "ESP"
+    "espana": "ESP",
+    "estados unidos": "US",
+    "usa": "US",
+    "u.s.a.": "US",
+    "united states": "US",
+    
 }
 
 
@@ -63,6 +67,7 @@ def extraer_codigo_pais(texto):
 def columna_a_codigo_pais(df, columna):
 
     return df[columna].apply(extraer_codigo_pais)
+
 
 def contar_vacios(df, columna):
 

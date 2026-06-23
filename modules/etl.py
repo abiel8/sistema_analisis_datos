@@ -84,6 +84,37 @@ def mostrar_etl():
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
 
+# ── Filtro previo (opcional) ────────────────────────────────
+    st.subheader("Filtrar antes de transformar")
+
+    aplicar_filtro_previo = st.checkbox("Filtrar filas antes de aplicar el ETL")
+
+    if aplicar_filtro_previo:
+
+        col_filtro = st.selectbox(
+            "Seleccione la columna para filtrar",
+            options=df.columns.tolist(),
+            key="col_filtro_previo"
+        )
+
+        valores_disponibles = df[col_filtro].dropna().unique().tolist()
+
+        valores_seleccionados = st.multiselect(
+            f"Seleccione el/los valor(es) de '{col_filtro}' a conservar",
+            options=valores_disponibles,
+            key="valores_filtro_previo"
+        )
+
+        if valores_seleccionados:
+            df = df[df[col_filtro].isin(valores_seleccionados)]
+
+            st.success(
+                f"Filtro aplicado: {len(df)} fila(s) coinciden con "
+                f"{', '.join(str(v) for v in valores_seleccionados)} en '{col_filtro}'."
+            )
+        else:
+            st.info("Seleccione al menos un valor para aplicar el filtro.")
+
     st.subheader("Transformaciones")
 
     # ── Limpieza ──────────────────────────────────────────────
