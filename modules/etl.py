@@ -32,7 +32,6 @@ def _convertir_tipos_preservando_ceros(df):
             columnas_protegidas.append(columna)
             continue
 
-        # Si no tiene ceros iniciales, intentar convertir a número
         try:
             df[columna] = pd.to_numeric(serie)
         except (ValueError, TypeError):
@@ -53,6 +52,29 @@ def mostrar_etl():
     if not archivo:
         return
 
+    # ── Selección de hoja (solo para Excel) ────────────────────
+    hoja_seleccionada = 0
+
+    if not archivo.name.endswith(".csv"):
+        try:
+            xls = pd.ExcelFile(archivo)
+            hojas_disponibles = xls.sheet_names
+
+            if len(hojas_disponibles) > 1:
+                hoja_seleccionada = st.selectbox(
+                    "El archivo tiene varias hojas. Seleccione cuál usar:",
+                    options=hojas_disponibles
+                )
+            else:
+                hoja_seleccionada = hojas_disponibles[0]
+
+        except Exception as e:
+            st.error(f"No se pudo leer la lista de hojas del archivo: {e}")
+            return
+
+        finally:
+            archivo.seek(0)
+
     # ── Configuración de lectura ───────────────────────────────
     st.subheader("Configuración de lectura")
 
@@ -71,9 +93,15 @@ def mostrar_etl():
             if archivo.name.endswith(".csv"):
                 df_crudo = pd.read_csv(archivo, header=None, nrows=15)
             elif archivo.name.endswith(".xls"):
-                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="xlrd")
+                df_crudo = pd.read_excel(
+                    archivo, header=None, nrows=15,
+                    sheet_name=hoja_seleccionada, engine="xlrd"
+                )
             else:
-                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="openpyxl")
+                df_crudo = pd.read_excel(
+                    archivo, header=None, nrows=15,
+                    sheet_name=hoja_seleccionada, engine="openpyxl"
+                )
 
             st.dataframe(df_crudo, use_container_width=True)
 
@@ -81,16 +109,22 @@ def mostrar_etl():
             st.warning(f"No se pudo generar la vista previa cruda: {e}")
 
         finally:
-            archivo.seek(0)  # Resetear el puntero tras la vista previa
+            archivo.seek(0)
 
     # ── Cargar con el encabezado correcto (todo como texto primero) ──
     try:
         if archivo.name.endswith(".csv"):
             df_original = pd.read_csv(archivo, header=int(fila_encabezado), dtype=str)
         elif archivo.name.endswith(".xls"):
-            df_original = pd.read_excel(archivo, header=int(fila_encabezado), dtype=str, engine="xlrd")
+            df_original = pd.read_excel(
+                archivo, header=int(fila_encabezado),
+                sheet_name=hoja_seleccionada, dtype=str, engine="xlrd"
+            )
         else:
-            df_original = pd.read_excel(archivo, header=int(fila_encabezado), dtype=str, engine="openpyxl")
+            df_original = pd.read_excel(
+                archivo, header=int(fila_encabezado),
+                sheet_name=hoja_seleccionada, dtype=str, engine="openpyxl"
+            )
 
     except ValueError as e:
         st.error(

@@ -1,7 +1,42 @@
+import re
+
 import pandas as pd
 import streamlit as st
 
 from utils.validaciones import *
+
+
+def _columna_tiene_cero_inicial(serie):
+
+    valores = serie.dropna().astype(str)
+
+    if valores.empty:
+        return False
+
+    patron_cero_inicial = re.compile(r"^0\d+$")
+
+    return valores.apply(lambda v: bool(patron_cero_inicial.match(v.strip()))).any()
+
+
+def _convertir_tipos_preservando_ceros(df):
+
+    columnas_protegidas = []
+
+    for columna in df.columns:
+
+        serie = df[columna]
+
+        if _columna_tiene_cero_inicial(serie):
+            df[columna] = serie.astype(str).str.strip()
+            columnas_protegidas.append(columna)
+            continue
+
+        try:
+            df[columna] = pd.to_numeric(serie)
+        except (ValueError, TypeError):
+            pass  # Se deja como texto
+
+    return df, columnas_protegidas
 
 
 def mostrar_calidad_datos():
@@ -15,6 +50,29 @@ def mostrar_calidad_datos():
 
     if not archivo:
         return
+
+    # ── Selección de hoja (solo para Excel) ────────────────────
+    hoja_seleccionada = 0
+
+    if not archivo.name.endswith(".csv"):
+        try:
+            xls = pd.ExcelFile(archivo)
+            hojas_disponibles = xls.sheet_names
+
+            if len(hojas_disponibles) > 1:
+                hoja_seleccionada = st.selectbox(
+                    "El archivo tiene varias hojas. Seleccione cuál usar:",
+                    options=hojas_disponibles
+                )
+            else:
+                hoja_seleccionada = hojas_disponibles[0]
+
+        except Exception as e:
+            st.error(f"No se pudo leer la lista de hojas del archivo: {e}")
+            return
+
+        finally:
+            archivo.seek(0)
 
     # ── Configuración de lectura ───────────────────────────────
     st.subheader("Configuración de lectura")
@@ -44,9 +102,15 @@ def mostrar_calidad_datos():
             if archivo.name.endswith(".csv"):
                 df_crudo = pd.read_csv(archivo, header=None, nrows=15)
             elif archivo.name.endswith(".xls"):
-                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="xlrd")
+                df_crudo = pd.read_excel(
+                    archivo, header=None, nrows=15,
+                    sheet_name=hoja_seleccionada, engine="xlrd"
+                )
             else:
-                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="openpyxl")
+                df_crudo = pd.read_excel(
+                    archivo, header=None, nrows=15,
+                    sheet_name=hoja_seleccionada, engine="openpyxl"
+                )
 
             st.dataframe(df_crudo, use_container_width=True)
 
@@ -72,6 +136,7 @@ def mostrar_calidad_datos():
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                sheet_name=hoja_seleccionada,
                 dtype=str,
                 engine="xlrd"
             )
@@ -80,6 +145,7 @@ def mostrar_calidad_datos():
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                sheet_name=hoja_seleccionada,
                 dtype=str,
                 engine="openpyxl"
             )
@@ -105,6 +171,14 @@ def mostrar_calidad_datos():
     if df.empty:
         st.warning("El archivo se leyó correctamente, pero no contiene datos con esta configuración.")
         return
+
+    df, columnas_protegidas = _convertir_tipos_preservando_ceros(df)
+
+    if columnas_protegidas:
+        st.info(
+            "Se detectaron y protegieron como texto estas columnas con ceros a la izquierda: "
+            f"{', '.join(columnas_protegidas)}"
+        )
 
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
@@ -165,7 +239,8 @@ def mostrar_calidad_datos():
             st.progress(resultado_email["porcentaje_validos"] / 100)
             st.caption(f"{resultado_email['porcentaje_validos']}% de correos válidos")
 
-            df_detalle_email = df[[columna]].copy()
+            df_detalle_email = df.copy()
+            df_detalle_email.insert(0, "fila_excel", df_detalle_email.index + 2)
             df_detalle_email["diagnostico"] = resultado_email["detalle"]
 
             mostrar_solo_invalidos_email = st.checkbox(
@@ -193,10 +268,10 @@ def mostrar_calidad_datos():
             st.error(f"No se pudo validar la columna de correos: {e}")
 
     # ═══════════════════════════════════════════════════════════
-    # Validación de teléfonos (Honduras, opcional)
+    # Validación de teléfonos (opcional)
     # ═══════════════════════════════════════════════════════════
 
-    st.subheader("Validar números telefónicos (Honduras)")
+    st.subheader("Validar números telefónicos")
 
     validar_telefonos = st.checkbox(
         f"Validar formato de teléfono en la columna '{columna}'",
@@ -205,8 +280,28 @@ def mostrar_calidad_datos():
 
     if validar_telefonos:
 
+        modo_telefono = st.radio(
+            "¿Qué tipo de números tiene esta columna?",
+            options=["Solo Honduras", "Internacional"],
+            horizontal=True,
+            key="modo_telefono"
+        )
+
         try:
-            resultado_tel = resumen_validacion_telefono(df, columna)
+            if modo_telefono == "Solo Honduras":
+                resultado_tel = resumen_validacion_telefono(df, columna)
+
+            else:
+                region_default = st.text_input(
+                    "Código de país por defecto (ISO de 2 letras, ej: HN, MX, US)",
+                    value="HN",
+                    max_chars=2,
+                    key="region_default_telefono"
+                ).upper()
+
+                resultado_tel = resumen_validacion_telefono_internacional(
+                    df, columna, region_default
+                )
 
             ct1, ct2, ct3 = st.columns(3)
             ct1.metric("Total de registros", resultado_tel["total"])
@@ -216,7 +311,8 @@ def mostrar_calidad_datos():
             st.progress(resultado_tel["porcentaje_validos"] / 100)
             st.caption(f"{resultado_tel['porcentaje_validos']}% de teléfonos válidos")
 
-            df_detalle_tel = df[[columna]].copy()
+            df_detalle_tel = df.copy()
+            df_detalle_tel.insert(0, "fila_excel", df_detalle_tel.index + 2)
             df_detalle_tel["diagnostico"] = resultado_tel["detalle"]
 
             mostrar_solo_invalidos_tel = st.checkbox(
@@ -242,4 +338,3 @@ def mostrar_calidad_datos():
 
         except Exception as e:
             st.error(f"No se pudo validar la columna de teléfonos: {e}")
-            

@@ -54,8 +54,20 @@ PAISES = {
     "denmark": "DK",
     "republic of korea": "KR",
     "tegucigalpa": "HN",
+    "francisco morazan": "HN",
     "san pedro sula": "HN",
     "sps": "HN",
+    "danli": "HN",
+    "comayaguela": "HN",
+    "comayaguela": "HN",
+    "comayagua": "HN",
+    "olancho": "HN",
+    "zamorano": "HN",
+    "ceiba": "HN",
+    "boston": "US",
+    "chicago": "US",
+    "new york": "US",
+    "washington": "US",
 }
 
 
@@ -285,11 +297,6 @@ def _diagnosticar_telefono_hn(valor):
 
     # Quitar separadores comunes: espacios, guiones, paréntesis, puntos
     solo_digitos = re.sub(r"[\s\-\.\(\)]", "", texto)
-
-    if solo_digitos.startswith("+1"):
-        solo_digitos = solo_digitos[2:]
-    elif solo_digitos.startswith("1") and len(solo_digitos) > 9:
-        solo_digitos = solo_digitos[1:]
 
     # Quitar el código de país +504 o 504 al inicio, si viene incluido
     if solo_digitos.startswith("+504"):

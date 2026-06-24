@@ -1,6 +1,12 @@
+import re
+
 import pandas as pd
 import plotly.express as px
 
+
+# ═══════════════════════════════════════════════════════════════
+# Gráficos básicos
+# ═══════════════════════════════════════════════════════════════
 
 def grafico_barras(df, x, y):
 
@@ -40,7 +46,9 @@ def grafico_dispersion(df, x, y):
     )
 
 
-# ── Cálculo de condiciones de calidad ───────────────────────────
+# ═══════════════════════════════════════════════════════════════
+# Cálculo de condiciones de calidad (comparación entre columnas)
+# ═══════════════════════════════════════════════════════════════
 
 def _porcentaje_vacios(serie):
 
@@ -119,4 +127,72 @@ def grafico_calidad_archivo(df_calidad, condicion, titulo):
         title=titulo,
         labels={"columna": "Columna", condicion: "Porcentaje (%)"},
         range_y=[0, 100]
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Distribución por categorías dentro de una columna
+# ═══════════════════════════════════════════════════════════════
+
+def _clasificar_valor(valor):
+
+    if pd.isna(valor) or str(valor).strip() == "":
+        return "Vacío"
+
+    texto = str(valor).strip()
+
+    tiene_numero = bool(re.search(r"\d", texto))
+    tiene_letra = bool(re.search(r"[A-Za-z]", texto))
+    tiene_especial = bool(re.search(r"[^A-Za-z0-9\s]", texto))
+
+    if tiene_especial:
+        return "Caracteres especiales"
+
+    if tiene_numero and tiene_letra:
+        return "Alfanumérico (letras y números)"
+
+    if tiene_numero:
+        return "Solo números"
+
+    if tiene_letra:
+        return "Solo letras"
+
+    return "Otro"
+
+
+def clasificar_columna(df, columna):
+
+    return df[columna].apply(_clasificar_valor)
+
+
+def calcular_distribucion_columna(df, columna):
+
+    clasificacion = clasificar_columna(df, columna)
+
+    conteo = clasificacion.value_counts().reset_index()
+    conteo.columns = ["categoria", "cantidad"]
+
+    conteo["porcentaje"] = round(conteo["cantidad"] / len(df) * 100, 2)
+
+    return conteo
+
+
+def grafico_distribucion_columna(df_distribucion, titulo, tipo="Pastel"):
+
+    if tipo == "Pastel":
+        return px.pie(
+            df_distribucion,
+            names="categoria",
+            values="cantidad",
+            title=titulo,
+            hover_data=["porcentaje"]
+        )
+
+    return px.bar(
+        df_distribucion,
+        x="categoria",
+        y="cantidad",
+        title=titulo,
+        text="porcentaje",
+        labels={"categoria": "Categoría", "cantidad": "Cantidad"}
     )

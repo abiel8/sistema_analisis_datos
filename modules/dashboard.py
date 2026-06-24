@@ -11,7 +11,9 @@ from utils.graficos import (
     calcular_calidad_columna,
     calcular_calidad_archivo,
     grafico_calidad_columna,
-    grafico_calidad_archivo
+    grafico_calidad_archivo,
+    calcular_distribucion_columna,
+    grafico_distribucion_columna
 )
 
 
@@ -40,10 +42,8 @@ def _convertir_tipos_preservando_ceros(df):
             columnas_protegidas.append(columna)
             continue
 
-        # Si no tiene ceros iniciales, intentar convertir a número
         try:
-            convertido = pd.to_numeric(serie)
-            df[columna] = convertido
+            df[columna] = pd.to_numeric(serie)
         except (ValueError, TypeError):
             pass  # Se deja como texto
 
@@ -56,11 +56,34 @@ def mostrar_dashboard():
 
     archivo = st.file_uploader(
         "Seleccione un archivo",
-        type=["xlsx", "csv"]
+        type=["xlsx", "csv", "xls"]
     )
 
     if not archivo:
         return
+
+    # ── Selección de hoja (solo para Excel) ────────────────────
+    hoja_seleccionada = 0
+
+    if not archivo.name.endswith(".csv"):
+        try:
+            xls = pd.ExcelFile(archivo)
+            hojas_disponibles = xls.sheet_names
+
+            if len(hojas_disponibles) > 1:
+                hoja_seleccionada = st.selectbox(
+                    "El archivo tiene varias hojas. Seleccione cuál usar:",
+                    options=hojas_disponibles
+                )
+            else:
+                hoja_seleccionada = hojas_disponibles[0]
+
+        except Exception as e:
+            st.error(f"No se pudo leer la lista de hojas del archivo: {e}")
+            return
+
+        finally:
+            archivo.seek(0)
 
     # ── Configuración de lectura ───────────────────────────────
     st.subheader("Configuración de lectura")
@@ -98,6 +121,7 @@ def mostrar_dashboard():
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                sheet_name=hoja_seleccionada,
                 dtype=str,
                 engine="xlrd"
             )
@@ -106,6 +130,7 @@ def mostrar_dashboard():
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                sheet_name=hoja_seleccionada,
                 dtype=str,
                 engine="openpyxl"
             )
@@ -145,8 +170,6 @@ def mostrar_dashboard():
 
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
-
-    # (el resto del módulo sigue exactamente igual...)
 
     # ═══════════════════════════════════════════════════════════
     # Sección: Calidad de datos
@@ -229,6 +252,48 @@ def mostrar_dashboard():
 
         except Exception as e:
             st.error(f"No se pudo calcular la calidad del archivo: {e}")
+
+    # ═══════════════════════════════════════════════════════════
+    # Sección: Distribución por columna (categorías)
+    # ═══════════════════════════════════════════════════════════
+
+    st.subheader("Distribución de una columna por categoría")
+
+    columnas_distribucion = st.multiselect(
+        "Seleccione una o más columnas a analizar",
+        options=columnas,
+        key="columnas_distribucion"
+    )
+
+    tipo_grafico_distribucion = st.radio(
+        "Tipo de gráfico",
+        options=["Pastel", "Barras"],
+        horizontal=True,
+        key="tipo_grafico_distribucion"
+    )
+
+    if columnas_distribucion:
+
+        cols_dist = st.columns(2)
+
+        for idx, col_dist in enumerate(columnas_distribucion):
+
+            try:
+                df_dist = calcular_distribucion_columna(df, col_dist)
+
+                fig_dist = grafico_distribucion_columna(
+                    df_dist,
+                    f"Distribución de '{col_dist}'",
+                    tipo_grafico_distribucion
+                )
+
+                cols_dist[idx % 2].plotly_chart(fig_dist, use_container_width=True)
+
+                with cols_dist[idx % 2].expander(f"Ver detalle numérico de '{col_dist}'"):
+                    st.dataframe(df_dist, use_container_width=True)
+
+            except Exception as e:
+                cols_dist[idx % 2].error(f"No se pudo analizar '{col_dist}': {e}")
 
     # ═══════════════════════════════════════════════════════════
     # Sección: Gráficos personalizados
