@@ -10,7 +10,7 @@ def mostrar_calidad_datos():
 
     archivo = st.file_uploader(
         "Seleccione un archivo",
-        type=["xlsx", "csv"]
+        type=["xlsx", "csv", "xls"]
     )
 
     if not archivo:
@@ -39,11 +39,12 @@ def mostrar_calidad_datos():
         help="Por defecto es la fila siguiente al encabezado. Si hay filas vacías de separación, ajusta aquí."
     )
 
-    # ── Vista previa cruda (con su propio manejo de errores) ───
     with st.expander("Ver archivo crudo (sin procesar)"):
         try:
             if archivo.name.endswith(".csv"):
                 df_crudo = pd.read_csv(archivo, header=None, nrows=15)
+            elif archivo.name.endswith(".xls"):
+                df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="xlrd")
             else:
                 df_crudo = pd.read_excel(archivo, header=None, nrows=15, engine="openpyxl")
 
@@ -55,7 +56,7 @@ def mostrar_calidad_datos():
         finally:
             archivo.seek(0)
 
-    # ── Cargar: encabezado de una fila + datos desde otra ──────
+    # ── Cargar: encabezado de una fila + datos desde otra, todo como texto ──
     filas_a_saltar = list(range(int(fila_encabezado) + 1, int(fila_inicio_datos)))
 
     try:
@@ -63,13 +64,15 @@ def mostrar_calidad_datos():
             df = pd.read_csv(
                 archivo,
                 header=int(fila_encabezado),
-                skiprows=filas_a_saltar
+                skiprows=filas_a_saltar,
+                dtype=str
             )
         elif archivo.name.endswith(".xls"):
             df = pd.read_excel(
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                dtype=str,
                 engine="xlrd"
             )
         else:
@@ -77,6 +80,7 @@ def mostrar_calidad_datos():
                 archivo,
                 header=int(fila_encabezado),
                 skiprows=filas_a_saltar,
+                dtype=str,
                 engine="openpyxl"
             )
 
@@ -89,7 +93,7 @@ def mostrar_calidad_datos():
 
     except ImportError:
         st.error(
-            "Falta una librería para leer este tipo de archivo Excel. "
+            "Falta una librería para leer este tipo de archivo. "
             "Si es un archivo .xls antiguo, instale xlrd con: pip install xlrd"
         )
         return
@@ -105,13 +109,16 @@ def mostrar_calidad_datos():
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
 
-    # ── Selección de columna(s) para las métricas ──────────────
+    # ── Selección de columna ────────────────────────────────────
     columna = st.selectbox(
-        "Seleccione una columna para ver el resumen de calidad",
+        "Seleccione una columna para analizar",
         df.columns
     )
 
-    # ── Resumen de calidad ─────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════
+    # Resumen general de calidad (siempre visible)
+    # ═══════════════════════════════════════════════════════════
+
     st.subheader("Resumen de calidad")
 
     try:
@@ -134,96 +141,105 @@ def mostrar_calidad_datos():
         st.error(f"No se pudieron calcular las métricas para la columna '{columna}': {e}")
         return
 
-    # ── Filtrado por condiciones, en una o varias columnas ─────
-    st.subheader("Filtrar filas por condición")
+    # ═══════════════════════════════════════════════════════════
+    # Validación de correos electrónicos (opcional)
+    # ═══════════════════════════════════════════════════════════
 
-    columnas_a_filtrar = st.multiselect(
-        "Seleccione una o más columnas donde buscar",
-        options=df.columns.tolist(),
-        default=[columna]
+    st.subheader("Validar correos electrónicos")
+
+    validar_correos = st.checkbox(
+        f"Validar formato de correos en la columna '{columna}'",
+        key="check_validar_email"
     )
 
-    OPCIONES = {
-        "Vacíos":                lambda d, c: d[c].isna() | (d[c].astype(str).str.strip() == ""),
-        "Duplicados":            lambda d, c: d[c].duplicated(keep=False),
-        "Longitud > 10":         lambda d, c: d[c].astype(str).str.len() > 10,
-        "Contiene números":      lambda d, c: d[c].astype(str).str.contains(r'\d', na=False),
-        "Contiene letras":       lambda d, c: d[c].astype(str).str.contains(r'[a-zA-Z]', na=False),
-        "Solo números":          lambda d, c: d[c].astype(str).str.fullmatch(r'\d+', na=False),
-        "Solo letras":           lambda d, c: d[c].astype(str).str.fullmatch(r'[a-zA-Z]+', na=False),
-        "Caracteres especiales": lambda d, c: d[c].astype(str).str.contains(r'[^a-zA-Z0-9\s]', na=False),
-    }
+    if validar_correos:
 
-    seleccion = st.multiselect(
-        "Seleccione una o más condiciones para filtrar",
-        options=list(OPCIONES.keys())
+        try:
+            resultado_email = resumen_validacion_email(df, columna)
+
+            ce1, ce2, ce3 = st.columns(3)
+            ce1.metric("Total de registros", resultado_email["total"])
+            ce2.metric("Válidos", resultado_email["validos"])
+            ce3.metric("Inválidos", resultado_email["invalidos"])
+
+            st.progress(resultado_email["porcentaje_validos"] / 100)
+            st.caption(f"{resultado_email['porcentaje_validos']}% de correos válidos")
+
+            df_detalle_email = df[[columna]].copy()
+            df_detalle_email["diagnostico"] = resultado_email["detalle"]
+
+            mostrar_solo_invalidos_email = st.checkbox(
+                "Mostrar solo los inválidos",
+                value=True,
+                key="solo_invalidos_email"
+            )
+
+            if mostrar_solo_invalidos_email:
+                df_detalle_email = df_detalle_email[df_detalle_email["diagnostico"] != "Válido"]
+
+            st.dataframe(df_detalle_email, use_container_width=True)
+
+            if not df_detalle_email.empty:
+                csv_email = df_detalle_email.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="Descargar diagnóstico de correos (.csv)",
+                    data=csv_email,
+                    file_name="diagnostico_correos.csv",
+                    mime="text/csv",
+                    key="descargar_diagnostico_email"
+                )
+
+        except Exception as e:
+            st.error(f"No se pudo validar la columna de correos: {e}")
+
+    # ═══════════════════════════════════════════════════════════
+    # Validación de teléfonos (Honduras, opcional)
+    # ═══════════════════════════════════════════════════════════
+
+    st.subheader("Validar números telefónicos (Honduras)")
+
+    validar_telefonos = st.checkbox(
+        f"Validar formato de teléfono en la columna '{columna}'",
+        key="check_validar_telefono"
     )
 
-    if not columnas_a_filtrar or not seleccion:
-        return
+    if validar_telefonos:
 
-    modo_condiciones = st.radio(
-        "¿Cómo combinar las condiciones entre sí?",
-        options=["Cualquiera (OR)", "Todas (AND)"],
-        horizontal=True,
-        key="modo_condiciones"
-    )
+        try:
+            resultado_tel = resumen_validacion_telefono(df, columna)
 
-    modo_columnas = st.radio(
-        "¿Cómo combinar entre las columnas seleccionadas?",
-        options=["Cualquiera columna (OR)", "Todas las columnas (AND)"],
-        horizontal=True,
-        key="modo_columnas"
-    )
+            ct1, ct2, ct3 = st.columns(3)
+            ct1.metric("Total de registros", resultado_tel["total"])
+            ct2.metric("Válidos", resultado_tel["validos"])
+            ct3.metric("Inválidos", resultado_tel["invalidos"])
 
-    try:
-        mascaras_por_columna = []
+            st.progress(resultado_tel["porcentaje_validos"] / 100)
+            st.caption(f"{resultado_tel['porcentaje_validos']}% de teléfonos válidos")
 
-        for col in columnas_a_filtrar:
+            df_detalle_tel = df[[columna]].copy()
+            df_detalle_tel["diagnostico"] = resultado_tel["detalle"]
 
-            mascaras_condicion = [
-                OPCIONES[opcion](df, col)
-                for opcion in seleccion
-            ]
+            mostrar_solo_invalidos_tel = st.checkbox(
+                "Mostrar solo los inválidos",
+                value=True,
+                key="solo_invalidos_telefono"
+            )
 
-            if modo_condiciones == "Cualquiera (OR)":
-                mascara_col = mascaras_condicion[0]
-                for m in mascaras_condicion[1:]:
-                    mascara_col = mascara_col | m
-            else:
-                mascara_col = mascaras_condicion[0]
-                for m in mascaras_condicion[1:]:
-                    mascara_col = mascara_col & m
+            if mostrar_solo_invalidos_tel:
+                df_detalle_tel = df_detalle_tel[df_detalle_tel["diagnostico"] != "Válido"]
 
-            mascaras_por_columna.append(mascara_col)
+            st.dataframe(df_detalle_tel, use_container_width=True)
 
-        if modo_columnas == "Cualquiera columna (OR)":
-            mascara_final = mascaras_por_columna[0]
-            for m in mascaras_por_columna[1:]:
-                mascara_final = mascara_final | m
-        else:
-            mascara_final = mascaras_por_columna[0]
-            for m in mascaras_por_columna[1:]:
-                mascara_final = mascara_final & m
+            if not df_detalle_tel.empty:
+                csv_tel = df_detalle_tel.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="Descargar diagnóstico de teléfonos (.csv)",
+                    data=csv_tel,
+                    file_name="diagnostico_telefonos.csv",
+                    mime="text/csv",
+                    key="descargar_diagnostico_telefono"
+                )
 
-        df_filtrado = df[mascara_final]
-
-    except Exception as e:
-        st.error(f"Ocurrió un error al aplicar el filtro: {e}")
-        return
-
-    st.markdown(
-        f"**{len(df_filtrado)}** filas encontradas "
-        f"de **{len(df)}** totales."
-    )
-
-    st.dataframe(df_filtrado, use_container_width=True)
-
-    csv = df_filtrado.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="Descargar filas filtradas (.csv)",
-        data=csv,
-        file_name="filas_filtradas.csv",
-        mime="text/csv"
-    )
-    
+        except Exception as e:
+            st.error(f"No se pudo validar la columna de teléfonos: {e}")
+            
