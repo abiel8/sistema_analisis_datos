@@ -1,5 +1,6 @@
 import re
 import unicodedata
+import string
 
 import pandas as pd
 import phonenumbers
@@ -59,7 +60,6 @@ PAISES = {
     "sps": "HN",
     "danli": "HN",
     "comayaguela": "HN",
-    "comayaguela": "HN",
     "comayagua": "HN",
     "olancho": "HN",
     "zamorano": "HN",
@@ -80,14 +80,39 @@ def _normalizar_texto(texto):
 
     return texto
 
+def limpiar_texto_columna(serie):
+
+    def _limpiar_valor(valor):
+
+        if pd.isna(valor):
+            return valor
+
+        texto = str(valor).strip()
+
+        # Quitar tildes y diacríticos (á→a, é→e, etc.), pero preservar la ñ
+        # temporalmente para convertirla explícitamente después
+        texto = texto.replace("ñ", "{{enie}}").replace("Ñ", "{{ENIE}}")
+
+        texto = unicodedata.normalize("NFKD", texto)
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+
+        texto = texto.replace("{{enie}}", "n").replace("{{ENIE}}", "N")
+
+        # Quitar todos los signos de puntuación
+        texto = texto.translate(str.maketrans("", "", string.punctuation))
+
+        # Quitar espacios extremos y colapsar espacios múltiples internos
+        texto = " ".join(texto.split())
+
+        return texto
+
+    return serie.apply(_limpiar_valor)
+
 
 def extraer_codigo_pais(texto):
 
     texto_normalizado = _normalizar_texto(texto)
 
-    # Ordenar por longitud descendente para que las claves más largas
-    # (ej. "republica dominicana") se detecten antes que coincidencias
-    # parciales más cortas
     paises_ordenados = sorted(
         PAISES.items(),
         key=lambda item: len(item[0]),
@@ -136,17 +161,6 @@ def longitud_mayor(df, columna, n):
     )
 
 
-def longitud_menor(df, columna, n):
-
-    return (
-        df[columna]
-        .astype(str)
-        .str.len()
-        .lt(n)
-        .sum()
-    )
-
-
 def contiene_numeros(df, columna):
 
     return (
@@ -187,16 +201,6 @@ def solo_letras(df, columna):
     )
 
 
-def espacios_inicio_final(df, columna):
-
-    return (
-        df[columna]
-        .astype(str)
-        .apply(lambda x: x != x.strip())
-        .sum()
-    )
-
-
 def caracteres_especiales(df, columna):
 
     return (
@@ -210,17 +214,6 @@ def caracteres_especiales(df, columna):
 # ═══════════════════════════════════════════════════════════════
 # Validación de correos electrónicos
 # ═══════════════════════════════════════════════════════════════
-
-def validar_email(df, columna):
-
-    patron = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-
-    return (
-        ~df[columna]
-        .astype(str)
-        .str.match(patron)
-    ).sum()
-
 
 def _diagnosticar_email(valor):
 
@@ -288,63 +281,116 @@ def resumen_validacion_email(df, columna):
 # Validación de teléfonos (Honduras, 8 dígitos)
 # ═══════════════════════════════════════════════════════════════
 
-def _diagnosticar_telefono_hn(valor):
+    # ═══════════════════════════════════════════════════════════════
+# Evaluación de condiciones por fila (para Dashboard)
+# ═══════════════════════════════════════════════════════════════
 
-    if pd.isna(valor) or str(valor).strip() == "":
-        return "Vacío"
+def mascara_vacios(df, columna):
 
-    texto = str(valor).strip()
-
-    # Quitar separadores comunes: espacios, guiones, paréntesis, puntos
-    solo_digitos = re.sub(r"[\s\-\.\(\)]", "", texto)
-
-    # Quitar el código de país +504 o 504 al inicio, si viene incluido
-    if solo_digitos.startswith("+504"):
-        solo_digitos = solo_digitos[4:]
-    elif solo_digitos.startswith("504") and len(solo_digitos) > 8:
-        solo_digitos = solo_digitos[3:]
-
-    if not solo_digitos.isdigit():
-        return "Contiene caracteres inválidos"
-
-    if len(solo_digitos) < 8:
-        return "Muy corto (menos de 8 dígitos)"
-
-    if len(solo_digitos) > 8:
-        return "Muy largo (más de 8 dígitos)"
-
-    primer_digito = solo_digitos[0]
-
-    if primer_digito not in ("2", "3", "7", "8", "9"):
-        return "Prefijo no reconocido en Honduras"
-
-    return "Válido"
+    return df[columna].isna() | (df[columna].astype(str).str.strip() == "")
 
 
-def diagnosticar_columna_telefono(df, columna):
+def mascara_duplicados(df, columna):
 
-    return df[columna].apply(_diagnosticar_telefono_hn)
+    return df[columna].duplicated(keep=False)
 
 
-def resumen_validacion_telefono(df, columna):
+def mascara_contiene_texto(df, columna, texto_buscado):
 
-    diagnostico = diagnosticar_columna_telefono(df, columna)
+    return df[columna].astype(str).str.contains(texto_buscado, case=False, na=False, regex=False)
 
-    total = len(diagnostico)
-    validos = (diagnostico == "Válido").sum()
-    invalidos = total - validos
 
-    return {
-        "total": total,
-        "validos": validos,
-        "invalidos": invalidos,
-        "porcentaje_validos": round(validos / total * 100, 2) if total else 0,
-        "detalle": diagnostico
-    }
+def mascara_no_contiene_texto(df, columna, texto_buscado):
 
+    return ~mascara_contiene_texto(df, columna, texto_buscado)
+
+
+def mascara_longitud_mayor(df, columna, n):
+
+    return df[columna].astype(str).str.len() > n
+
+
+def mascara_longitud_menor(df, columna, n):
+
+    return df[columna].astype(str).str.len() < n
+
+
+def mascara_contiene_numeros(df, columna):
+
+    return df[columna].astype(str).str.contains(r"\d", regex=True, na=False)
+
+
+def mascara_contiene_letras(df, columna):
+
+    return df[columna].astype(str).str.contains(r"[A-Za-z]", regex=True, na=False)
+
+
+def mascara_solo_numeros(df, columna):
+
+    return df[columna].astype(str).str.isnumeric()
+
+
+def mascara_solo_letras(df, columna):
+
+    return df[columna].astype(str).str.isalpha()
+
+
+def mascara_caracteres_especiales(df, columna):
+
+    return df[columna].astype(str).str.contains(r"[^A-Za-z0-9 ]", regex=True, na=False)
+
+
+CONDICIONES_DASHBOARD = {
+    "Vacíos": {
+        "funcion": mascara_vacios,
+        "necesita_parametro": None
+    },
+    "Duplicados": {
+        "funcion": mascara_duplicados,
+        "necesita_parametro": None
+    },
+    "Contiene un valor específico": {
+        "funcion": mascara_contiene_texto,
+        "necesita_parametro": "texto"
+    },
+    "No contiene un valor específico": {
+        "funcion": mascara_no_contiene_texto,
+        "necesita_parametro": "texto"
+    },
+    "Longitud mayor a N": {
+        "funcion": mascara_longitud_mayor,
+        "necesita_parametro": "numero"
+    },
+    "Longitud menor a N": {
+        "funcion": mascara_longitud_menor,
+        "necesita_parametro": "numero"
+    },
+    "Contiene números": {
+        "funcion": mascara_contiene_numeros,
+        "necesita_parametro": None
+    },
+    "Contiene letras": {
+        "funcion": mascara_contiene_letras,
+        "necesita_parametro": None
+    },
+    "Solo números": {
+        "funcion": mascara_solo_numeros,
+        "necesita_parametro": None
+    },
+    "Solo letras": {
+        "funcion": mascara_solo_letras,
+        "necesita_parametro": None
+    },
+    "Caracteres especiales / símbolos": {
+        "funcion": mascara_caracteres_especiales,
+        "necesita_parametro": None
+    },
+}
 
 # ═══════════════════════════════════════════════════════════════
 # Validación de teléfonos internacionales (phonenumbers)
+# Detecta automáticamente si es nacional (8 dígitos) o ya trae
+# código de país pegado (más de 8 dígitos)
 # ═══════════════════════════════════════════════════════════════
 
 def _diagnosticar_telefono_internacional(valor, region_default="HN"):
@@ -352,10 +398,24 @@ def _diagnosticar_telefono_internacional(valor, region_default="HN"):
     if pd.isna(valor) or str(valor).strip() == "":
         return "Vacío"
 
-    texto = str(valor).strip()
+    texto_original = str(valor).strip()
+
+    solo_digitos = re.sub(r"[\s\-\.\(\)]", "", texto_original)
+
+    if not solo_digitos.replace("+", "").isdigit():
+        return "Contiene caracteres inválidos"
+
+    if texto_original.strip().startswith("+"):
+        texto_a_parsear = texto_original
+
+    elif len(solo_digitos) > 8:
+        texto_a_parsear = "+" + solo_digitos
+
+    else:
+        texto_a_parsear = texto_original
 
     try:
-        numero = phonenumbers.parse(texto, region_default)
+        numero = phonenumbers.parse(texto_a_parsear, region_default)
 
     except phonenumbers.NumberParseException as e:
 

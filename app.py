@@ -7,6 +7,7 @@ from modules.etl import mostrar_etl
 #from modules.reportes import mostrar_reportes
 #from modules.datos_maestros import mostrar_datos_maestros
 from modules.reglas_dinamicas import mostrar_reglas_dinamicas
+from utils.estilos import cargar_css
 
 
 st.set_page_config(
@@ -15,43 +16,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# ── Estilos personalizados ──────────────────────────────────────
-st.markdown(
-    """
-    <style>
-        .stApp {
-            background-color: #FFF4E5;
-        }
+cargar_css("static/styles.css")
 
-        h1, h2, h3 {
-            color: #036b39;
-        }
-
-        [data-testid="stSidebar"] {
-            background-color: #048047;
-        }
-
-        [data-testid="stSidebar"] * {
-            color: #FFFFFF;
-        }
-
-        .stButton > button {
-            background-color: #048047;
-            color: #FFFFFF;
-            border: none;
-        }
-
-        .stButton > button:hover {
-            background-color: #036b39;
-            color: #FFFFFF;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ── Logo en la barra lateral ────────────────────────────────────
-st.sidebar.image("assets/logo.png", use_container_width=True)
+# ── Logo en la barra lateral, con fondo propio para contraste ───
+with st.sidebar:
+    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
+    st.image("assets/logo.png", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 st.title("Gobernanza de Datos")
 
@@ -61,7 +32,6 @@ opcion = st.sidebar.selectbox(
 
     [
         "Calidad de Datos",
-        "Reglas Dinámicas",
         "ETL",
         "Dashboard"
     ]
@@ -87,9 +57,9 @@ elif opcion == "ETL":
 
  #   mostrar_datos_maestros()
 
-elif opcion == "Reglas Dinámicas":
+#elif opcion == "Reglas Dinámicas":
 
-    mostrar_reglas_dinamicas()
+ #   mostrar_reglas_dinamicas()
 
 elif opcion == "Dashboard":
 

@@ -270,7 +270,6 @@ def mostrar_calidad_datos():
     # ═══════════════════════════════════════════════════════════
     # Validación de teléfonos (opcional)
     # ═══════════════════════════════════════════════════════════
-
     st.subheader("Validar números telefónicos")
 
     validar_telefonos = st.checkbox(
@@ -280,28 +279,8 @@ def mostrar_calidad_datos():
 
     if validar_telefonos:
 
-        modo_telefono = st.radio(
-            "¿Qué tipo de números tiene esta columna?",
-            options=["Solo Honduras", "Internacional"],
-            horizontal=True,
-            key="modo_telefono"
-        )
-
         try:
-            if modo_telefono == "Solo Honduras":
-                resultado_tel = resumen_validacion_telefono(df, columna)
-
-            else:
-                region_default = st.text_input(
-                    "Código de país por defecto (ISO de 2 letras, ej: HN, MX, US)",
-                    value="HN",
-                    max_chars=2,
-                    key="region_default_telefono"
-                ).upper()
-
-                resultado_tel = resumen_validacion_telefono_internacional(
-                    df, columna, region_default
-                )
+            resultado_tel = resumen_validacion_telefono_internacional(df, columna, "HN")
 
             ct1, ct2, ct3 = st.columns(3)
             ct1.metric("Total de registros", resultado_tel["total"])

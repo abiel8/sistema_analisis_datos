@@ -3,18 +3,8 @@ import re
 import pandas as pd
 import streamlit as st
 
-from utils.graficos import (
-    grafico_barras,
-    grafico_lineas,
-    grafico_pastel,
-    grafico_dispersion,
-    calcular_calidad_columna,
-    calcular_calidad_archivo,
-    grafico_calidad_columna,
-    grafico_calidad_archivo,
-    calcular_distribucion_columna,
-    grafico_distribucion_columna
-)
+from utils.validaciones import CONDICIONES_DASHBOARD
+from utils.graficos import grafico_pastel
 
 
 def _columna_tiene_cero_inicial(serie):
@@ -166,231 +156,117 @@ def mostrar_dashboard():
         )
 
     columnas = df.columns.tolist()
-    columnas_numericas = df.select_dtypes(include="number").columns.tolist()
 
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
 
     # ═══════════════════════════════════════════════════════════
-    # Sección: Calidad de datos
+    # Sección: Evaluar condiciones por columna
     # ═══════════════════════════════════════════════════════════
 
-    st.subheader("Calidad de datos")
+    st.subheader("Evaluar condiciones por columna")
 
-    alcance = st.radio(
-        "¿Qué quiere analizar?",
-        options=["Una columna específica", "Todo el archivo"],
-        horizontal=True,
-        key="alcance_calidad"
-    )
-
-    n_caracteres = st.number_input(
-        "Umbral de longitud mínima (para la condición 'Longitud < N')",
-        min_value=1,
-        max_value=200,
-        value=5,
-        step=1,
-        key="n_caracteres_calidad"
-    )
-
-    if alcance == "Una columna específica":
-
-        columna_calidad = st.selectbox(
-            "Seleccione la columna a analizar",
-            options=columnas,
-            key="columna_calidad"
-        )
-
-        try:
-            resultados = calcular_calidad_columna(df, columna_calidad, int(n_caracteres))
-
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Vacíos", f"{resultados['Vacíos (%)']}%")
-            c2.metric("Duplicados", f"{resultados['Duplicados (%)']}%")
-            c3.metric(f"Longitud < {int(n_caracteres)}", f"{resultados[f'Longitud < {int(n_caracteres)} (%)']}%")
-
-            tipo_grafico_calidad = st.selectbox(
-                "Tipo de gráfico",
-                ["Barras", "Pastel"],
-                key="tipo_grafico_calidad_columna"
-            )
-
-            if tipo_grafico_calidad == "Barras":
-                fig = grafico_calidad_columna(resultados, f"Calidad de '{columna_calidad}'")
-                st.plotly_chart(fig, use_container_width=True)
-
-            else:
-                df_pastel = pd.DataFrame(
-                    list(resultados.items()),
-                    columns=["condicion", "porcentaje"]
-                )
-                fig = grafico_pastel(df_pastel, "condicion", "porcentaje")
-                st.plotly_chart(fig, use_container_width=True)
-
-        except Exception as e:
-            st.error(f"No se pudo calcular la calidad de la columna: {e}")
-
-    else:  # Todo el archivo
-
-        try:
-            df_calidad = calcular_calidad_archivo(df, int(n_caracteres))
-
-            st.dataframe(df_calidad, use_container_width=True)
-
-            condicion_a_graficar = st.selectbox(
-                "Seleccione qué condición comparar entre columnas",
-                options=[c for c in df_calidad.columns if c != "columna"],
-                key="condicion_calidad_archivo"
-            )
-
-            fig = grafico_calidad_archivo(
-                df_calidad,
-                condicion_a_graficar,
-                f"{condicion_a_graficar} por columna"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        except Exception as e:
-            st.error(f"No se pudo calcular la calidad del archivo: {e}")
-
-    # ═══════════════════════════════════════════════════════════
-    # Sección: Distribución por columna (categorías)
-    # ═══════════════════════════════════════════════════════════
-
-    st.subheader("Distribución de una columna por categoría")
-
-    columnas_distribucion = st.multiselect(
-        "Seleccione una o más columnas a analizar",
+    columna_eval = st.selectbox(
+        "Seleccione la columna a evaluar",
         options=columnas,
-        key="columnas_distribucion"
+        key="columna_evaluacion_dashboard"
     )
 
-    tipo_grafico_distribucion = st.radio(
-        "Tipo de gráfico",
-        options=["Pastel", "Barras"],
-        horizontal=True,
-        key="tipo_grafico_distribucion"
+    condiciones_seleccionadas = st.multiselect(
+        "Seleccione una o más condiciones",
+        options=list(CONDICIONES_DASHBOARD.keys()),
+        key="condiciones_dashboard"
     )
 
-    if columnas_distribucion:
+    # Recolectar parámetros necesarios para cada condición elegida
+    parametros_condicion = {}
 
-        cols_dist = st.columns(2)
+    for cond in condiciones_seleccionadas:
 
-        for idx, col_dist in enumerate(columnas_distribucion):
+        info = CONDICIONES_DASHBOARD[cond]
 
-            try:
-                df_dist = calcular_distribucion_columna(df, col_dist)
-
-                fig_dist = grafico_distribucion_columna(
-                    df_dist,
-                    f"Distribución de '{col_dist}'",
-                    tipo_grafico_distribucion
-                )
-
-                cols_dist[idx % 2].plotly_chart(fig_dist, use_container_width=True)
-
-                with cols_dist[idx % 2].expander(f"Ver detalle numérico de '{col_dist}'"):
-                    st.dataframe(df_dist, use_container_width=True)
-
-            except Exception as e:
-                cols_dist[idx % 2].error(f"No se pudo analizar '{col_dist}': {e}")
-
-    # ═══════════════════════════════════════════════════════════
-    # Sección: Gráficos personalizados
-    # ═══════════════════════════════════════════════════════════
-
-    st.subheader("Configurar gráficos personalizados")
-
-    num_graficos = st.number_input(
-        "¿Cuántos gráficos quiere mostrar?",
-        min_value=1,
-        max_value=6,
-        value=2,
-        step=1,
-        key="num_graficos_personalizados"
-    )
-
-    configuraciones = []
-
-    for i in range(int(num_graficos)):
-
-        with st.expander(f"Gráfico {i + 1}", expanded=True):
-
-            tipo = st.selectbox(
-                "Tipo de gráfico",
-                ["Barras", "Líneas", "Pastel", "Dispersión"],
-                key=f"tipo_{i}"
+        if info["necesita_parametro"] == "texto":
+            parametros_condicion[cond] = st.text_input(
+                f"Texto a buscar para '{cond}'",
+                key=f"param_texto_{cond}"
             )
 
-            if tipo in ("Barras", "Líneas", "Dispersión"):
+        elif info["necesita_parametro"] == "numero":
+            parametros_condicion[cond] = st.number_input(
+                f"Valor N para '{cond}'",
+                min_value=1,
+                value=10,
+                step=1,
+                key=f"param_numero_{cond}"
+            )
 
-                col_x = st.selectbox(
-                    "Columna X",
-                    columnas,
-                    key=f"x_{i}"
-                )
+    if condiciones_seleccionadas:
 
-                col_y = st.selectbox(
-                    "Columna Y",
-                    columnas_numericas if columnas_numericas else columnas,
-                    key=f"y_{i}"
-                )
+        for cond in condiciones_seleccionadas:
 
-                configuraciones.append({
-                    "tipo": tipo,
-                    "x": col_x,
-                    "y": col_y
-                })
+            st.markdown(f"### {cond}")
 
-            else:  # Pastel
-
-                col_nombres = st.selectbox(
-                    "Columna de categorías (nombres)",
-                    columnas,
-                    key=f"nombres_{i}"
-                )
-
-                col_valores = st.selectbox(
-                    "Columna de valores",
-                    columnas_numericas if columnas_numericas else columnas,
-                    key=f"valores_{i}"
-                )
-
-                configuraciones.append({
-                    "tipo": tipo,
-                    "nombres": col_nombres,
-                    "valores": col_valores
-                })
-
-    # ── Renderizar la cuadrícula de gráficos personalizados ─────
-    st.subheader("Resultado")
-
-    columnas_por_fila = 2
-    filas = [
-        configuraciones[i:i + columnas_por_fila]
-        for i in range(0, len(configuraciones), columnas_por_fila)
-    ]
-
-    for fila in filas:
-
-        cols_streamlit = st.columns(len(fila))
-
-        for col_streamlit, config in zip(cols_streamlit, fila):
+            info = CONDICIONES_DASHBOARD[cond]
+            funcion = info["funcion"]
 
             try:
-                if config["tipo"] == "Barras":
-                    fig = grafico_barras(df, config["x"], config["y"])
+                if info["necesita_parametro"] == "texto":
+                    texto = parametros_condicion[cond]
 
-                elif config["tipo"] == "Líneas":
-                    fig = grafico_lineas(df, config["x"], config["y"])
+                    if not texto:
+                        st.info(f"Escriba un texto a buscar para evaluar '{cond}'.")
+                        continue
 
-                elif config["tipo"] == "Dispersión":
-                    fig = grafico_dispersion(df, config["x"], config["y"])
+                    mascara = funcion(df, columna_eval, texto)
 
-                else:  # Pastel
-                    fig = grafico_pastel(df, config["nombres"], config["valores"])
+                elif info["necesita_parametro"] == "numero":
+                    numero = int(parametros_condicion[cond])
+                    mascara = funcion(df, columna_eval, numero)
 
-                col_streamlit.plotly_chart(fig, use_container_width=True)
+                else:
+                    mascara = funcion(df, columna_eval)
+
+                cantidad_cumple = mascara.sum()
+                cantidad_total = len(df)
+                cantidad_no_cumple = cantidad_total - cantidad_cumple
+
+                col_metric, col_chart = st.columns([1, 2])
+
+                with col_metric:
+                    st.metric("Cumplen la condición", int(cantidad_cumple))
+                    st.metric("No cumplen", int(cantidad_no_cumple))
+                    st.metric(
+                        "Porcentaje",
+                        f"{round(cantidad_cumple / cantidad_total * 100, 2)}%" if cantidad_total else "0%"
+                    )
+
+                with col_chart:
+                    df_pastel = pd.DataFrame({
+                        "categoria": ["Cumple", "No cumple"],
+                        "cantidad": [cantidad_cumple, cantidad_no_cumple]
+                    })
+
+                    fig = grafico_pastel(df_pastel, "categoria", "cantidad")
+                    st.plotly_chart(fig, use_container_width=True, key=f"chart_{cond}")
+
+                df_filas_cumplen = df[mascara].copy()
+                df_filas_cumplen.insert(0, "fila_excel", df_filas_cumplen.index + 2)
+
+                with st.expander(f"Ver filas que cumplen '{cond}' ({int(cantidad_cumple)} filas)"):
+
+                    st.dataframe(df_filas_cumplen, use_container_width=True)
+
+                    if not df_filas_cumplen.empty:
+                        csv_cond = df_filas_cumplen.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label=f"Descargar filas de '{cond}' (.csv)",
+                            data=csv_cond,
+                            file_name=f"filas_{cond.lower().replace(' ', '_')}.csv",
+                            mime="text/csv",
+                            key=f"descargar_{cond}"
+                        )
+
+                st.divider()
 
             except Exception as e:
-                col_streamlit.error(f"No se pudo generar el gráfico: {e}")
+                st.error(f"No se pudo evaluar la condición '{cond}': {e}")

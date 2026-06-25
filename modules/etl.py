@@ -4,7 +4,7 @@ import re
 import streamlit as st
 import pandas as pd
 
-from utils.validaciones import columna_a_codigo_pais
+from utils.validaciones import columna_a_codigo_pais, limpiar_texto_columna
 
 
 def _columna_tiene_cero_inicial(serie):
@@ -194,14 +194,11 @@ def mostrar_etl():
 
     st.subheader("Transformaciones")
 
-    # ── Texto ─────────────────────────────────────────────────
-    st.markdown("**Texto**")
-
     col1, col2, col3 = st.columns(3)
 
     convertir_mayusculas = col1.checkbox("Convertir a MAYÚSCULAS")
     convertir_minusculas = col2.checkbox("Convertir a minúsculas")
-    quitar_espacios     = col3.checkbox("Quitar espacios extremos (strip)")
+    limpiar_texto        = col3.checkbox("Limpiar texto (tildes, ñ, puntuación, espacios)")
 
     # ── Columnas ──────────────────────────────────────────────
     st.markdown("**Columnas**")
@@ -259,9 +256,9 @@ def mostrar_etl():
 
     columnas_texto = df.select_dtypes(include="object").columns
 
-    if quitar_espacios:
+    if limpiar_texto:
         for col in columnas_texto:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = limpiar_texto_columna(df[col])
 
     if convertir_mayusculas and not convertir_minusculas:
         for col in columnas_texto:

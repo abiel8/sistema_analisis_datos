@@ -1,0 +1,100 @@
+.stApp {
+    background-color: #FFF4E5;
+}
+
+
+
+/* Header superior de Streamlit (barra con Rerun, menú, etc.) */
+[data-testid="stHeader"] {
+    background-color: #FFF4E5;
+}
+
+[data-testid="stToolbar"] {
+    background-color: #FFF4E5;
+}
+
+/* Título principal en negro */
+h1, h1 span {
+    color: #1a1a1a !important;
+}
+
+/* Subtítulos en verde */
+h2, h3, h2 span, h3 span {
+    color: #048047 !important;
+}
+
+/* Texto general en el área principal */
+.stApp p, .stApp label, .stApp span {
+    color: #1a1a1a;
+}
+
+/* Barra lateral */
+[data-testid="stSidebar"] {
+    background-color: #048047;
+}
+
+[data-testid="stSidebar"] * {
+    color: #FFFFFF !important;
+}
+
+/* Recuadro de fondo para el logo, para que se note sobre el verde */
+.logo-container {
+    background-color: #FFF4E5;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+/* File uploader: caja contenedora */
+[data-testid="stFileUploader"] section {
+    background-color: #FFFFFF;
+    border: 2px dashed #048047;
+}
+
+[data-testid="stFileUploader"] section * {
+    color: #1a1a1a !important;
+}
+
+/* Texto dentro del área de arrastrar archivo */
+[data-testid="stFileUploaderDropzone"] {
+    background-color: #FFFFFF;
+}
+
+[data-testid="stFileUploaderDropzoneInstructions"] {
+    color: #1a1a1a !important;
+}
+
+[data-testid="stFileUploaderDropzoneInstructions"] span,
+[data-testid="stFileUploaderDropzoneInstructions"] small {
+    color: #1a1a1a !important;
+}
+
+/* Botón "Browse files" dentro del uploader */
+[data-testid="stFileUploaderDropzone"] button {
+    background-color: #048047 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+
+/* Selectbox / dropdown */
+[data-baseweb="select"] > div {
+    background-color: #FFFFFF;
+    border-color: #048047;
+}
+
+[data-baseweb="select"] * {
+    color: #1a1a1a !important;
+}
+
+/* Botones */
+.stButton > button, .stDownloadButton > button {
+    background-color: #048047;
+    color: #FFFFFF;
+    border: none;
+}
+
+.stButton > button:hover, .stDownloadButton > button:hover {
+    background-color: #036b39;
+    color: #FFFFFF;
+}
