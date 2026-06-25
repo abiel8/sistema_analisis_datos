@@ -216,11 +216,11 @@ Streamlit
     │
     ▼
 Modules
-(Dashboard, Calidad, ETL, Perfilado, etc.)
+(Dashboard, Calidad, ETL, etc.)
     │
     ▼
 Utils
-(Validaciones, Reglas, Exportación)
+(Validaciones, Reglas,)
     │
     ▼
 Pandas

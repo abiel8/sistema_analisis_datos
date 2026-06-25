@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import streamlit as st
 
-from utils.validaciones import CONDICIONES_DASHBOARD
+from utils.validaciones import CONDICIONES_DASHBOARD, TIPOS_VALIDACION
 from utils.graficos import grafico_pastel
 
 
@@ -159,114 +159,148 @@ def mostrar_dashboard():
 
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
-
+                
+# ═══════════════════════════════════════════════════════════
+    # Sección: Validación por columna (todo el archivo de una vez)
     # ═══════════════════════════════════════════════════════════
-    # Sección: Evaluar condiciones por columna
-    # ═══════════════════════════════════════════════════════════
 
-    st.subheader("Evaluar condiciones por columna")
+    st.subheader("Validación de todas las columnas")
 
-    columna_eval = st.selectbox(
-        "Seleccione la columna a evaluar",
-        options=columnas,
-        key="columna_evaluacion_dashboard"
-    )
+    st.caption("Para cada columna que quiera analizar, seleccione una o más condiciones.")
 
-    condiciones_seleccionadas = st.multiselect(
-        "Seleccione una o más condiciones",
-        options=list(CONDICIONES_DASHBOARD.keys()),
-        key="condiciones_dashboard"
-    )
+    opciones_tipo = [t for t in TIPOS_VALIDACION.keys() if t != "Sin validar"]
 
-    # Recolectar parámetros necesarios para cada condición elegida
-    parametros_condicion = {}
+    asignaciones = {}
+    parametros_asignacion = {}
 
-    for cond in condiciones_seleccionadas:
+    for col in columnas:
 
-        info = CONDICIONES_DASHBOARD[cond]
+        tipos_elegidos = st.multiselect(
+            col,
+            options=opciones_tipo,
+            key=f"tipos_validacion_{col}"
+        )
 
-        if info["necesita_parametro"] == "texto":
-            parametros_condicion[cond] = st.text_input(
-                f"Texto a buscar para '{cond}'",
-                key=f"param_texto_{cond}"
-            )
+        if tipos_elegidos:
 
-        elif info["necesita_parametro"] == "numero":
-            parametros_condicion[cond] = st.number_input(
-                f"Valor N para '{cond}'",
-                min_value=1,
-                value=10,
-                step=1,
-                key=f"param_numero_{cond}"
-            )
+            asignaciones[col] = tipos_elegidos
 
-    if condiciones_seleccionadas:
+            for tipo in tipos_elegidos:
 
-        for cond in condiciones_seleccionadas:
+                info = TIPOS_VALIDACION[tipo]
 
-            st.markdown(f"### {cond}")
+                if info and info.get("necesita_parametro") == "texto":
+                    parametros_asignacion[(col, tipo)] = st.text_input(
+                        f"Texto a buscar para '{tipo}' en '{col}'",
+                        key=f"param_texto_{col}_{tipo}"
+                    )
 
-            info = CONDICIONES_DASHBOARD[cond]
-            funcion = info["funcion"]
+                elif info and info.get("necesita_parametro") == "numero":
+                    parametros_asignacion[(col, tipo)] = st.number_input(
+                        f"Valor N para '{tipo}' en '{col}'",
+                        min_value=1,
+                        value=10,
+                        step=1,
+                        key=f"param_numero_{col}_{tipo}"
+                    )
+
+    ejecutar_analisis = st.button("Analizar todas las columnas marcadas")
+    
+    if ejecutar_analisis and asignaciones:
+
+        for col, tipos in asignaciones.items():
+
+            st.markdown(f"### {col} — *{', '.join(tipos)}*")
 
             try:
-                if info["necesita_parametro"] == "texto":
-                    texto = parametros_condicion[cond]
+                # Evaluar cada condición por separado
+                mascaras_individuales = {}
 
-                    if not texto:
-                        st.info(f"Escriba un texto a buscar para evaluar '{cond}'.")
-                        continue
+                for tipo in tipos:
 
-                    mascara = funcion(df, columna_eval, texto)
+                    info = TIPOS_VALIDACION[tipo]
+                    funcion = info["funcion"]
 
-                elif info["necesita_parametro"] == "numero":
-                    numero = int(parametros_condicion[cond])
-                    mascara = funcion(df, columna_eval, numero)
+                    if info.get("necesita_parametro") == "texto":
+                        texto = parametros_asignacion.get((col, tipo), "")
 
-                else:
-                    mascara = funcion(df, columna_eval)
+                        if not texto:
+                            st.info(f"Escriba un texto a buscar para '{tipo}' en '{col}'.")
+                            continue
 
-                cantidad_cumple = mascara.sum()
+                        mascaras_individuales[tipo] = funcion(df, col, texto)
+
+                    elif info.get("necesita_parametro") == "numero":
+                        numero = int(parametros_asignacion.get((col, tipo), 10))
+                        mascaras_individuales[tipo] = funcion(df, col, numero)
+
+                    else:
+                        mascaras_individuales[tipo] = funcion(df, col)
+
+                if not mascaras_individuales:
+                    continue
+
+                # Clasificar cada fila: la primera condición que cumple, en
+                # el orden en que el usuario las seleccionó
+                categoria_por_fila = pd.Series("Correcto", index=df.index)
+
+                for tipo, mascara in mascaras_individuales.items():
+                    sin_categoria_aun = categoria_por_fila == "Correcto"
+                    categoria_por_fila = categoria_por_fila.where(
+                        ~(mascara & sin_categoria_aun), tipo
+                    )
+
+                conteo = categoria_por_fila.value_counts().reset_index()
+                conteo.columns = ["categoria", "cantidad"]
+
                 cantidad_total = len(df)
-                cantidad_no_cumple = cantidad_total - cantidad_cumple
+                conteo["porcentaje"] = round(conteo["cantidad"] / cantidad_total * 100, 2)
 
                 col_metric, col_chart = st.columns([1, 2])
 
                 with col_metric:
-                    st.metric("Cumplen la condición", int(cantidad_cumple))
-                    st.metric("No cumplen", int(cantidad_no_cumple))
-                    st.metric(
-                        "Porcentaje",
-                        f"{round(cantidad_cumple / cantidad_total * 100, 2)}%" if cantidad_total else "0%"
-                    )
+                    for _, fila in conteo.iterrows():
+                        st.metric(fila["categoria"], f"{fila['cantidad']} ({fila['porcentaje']}%)")
 
                 with col_chart:
-                    df_pastel = pd.DataFrame({
-                        "categoria": ["Cumple", "No cumple"],
-                        "cantidad": [cantidad_cumple, cantidad_no_cumple]
-                    })
+                    fig = grafico_pastel(conteo, "categoria", "cantidad")
+                    st.plotly_chart(fig, use_container_width=True, key=f"chart_col_{col}")
 
-                    fig = grafico_pastel(df_pastel, "categoria", "cantidad")
-                    st.plotly_chart(fig, use_container_width=True, key=f"chart_{cond}")
+                df_con_categoria = df.copy()
+                df_con_categoria.insert(0, "fila_excel", df_con_categoria.index + 2)
+                df_con_categoria["categoria_error"] = categoria_por_fila
 
-                df_filas_cumplen = df[mascara].copy()
-                df_filas_cumplen.insert(0, "fila_excel", df_filas_cumplen.index + 2)
+                mostrar_solo_errores = st.checkbox(
+                    f"Mostrar solo filas con error en '{col}'",
+                    value=True,
+                    key=f"solo_errores_{col}"
+                )
 
-                with st.expander(f"Ver filas que cumplen '{cond}' ({int(cantidad_cumple)} filas)"):
+                df_mostrar = df_con_categoria
 
-                    st.dataframe(df_filas_cumplen, use_container_width=True)
+                if mostrar_solo_errores:
+                    df_mostrar = df_mostrar[df_mostrar["categoria_error"] != "Correcto"]
 
-                    if not df_filas_cumplen.empty:
-                        csv_cond = df_filas_cumplen.to_csv(index=False).encode("utf-8")
+                with st.expander(f"Ver filas de '{col}' ({len(df_mostrar)} filas)"):
+
+                    st.dataframe(df_mostrar, use_container_width=True)
+
+                    if not df_mostrar.empty:
+                        csv_col = df_mostrar.to_csv(index=False).encode("utf-8")
                         st.download_button(
-                            label=f"Descargar filas de '{cond}' (.csv)",
-                            data=csv_cond,
-                            file_name=f"filas_{cond.lower().replace(' ', '_')}.csv",
+                            label=f"Descargar filas de '{col}' (.csv)",
+                            data=csv_col,
+                            file_name=f"filas_{col}.csv",
                             mime="text/csv",
-                            key=f"descargar_{cond}"
+                            key=f"descargar_col_{col}"
                         )
 
                 st.divider()
 
             except Exception as e:
-                st.error(f"No se pudo evaluar la condición '{cond}': {e}")
+                st.error(f"No se pudo validar la columna '{col}': {e}")
+
+   
+
+    elif ejecutar_analisis and not asignaciones:
+        st.info("No marcó ninguna columna con condiciones de validación.")

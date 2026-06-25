@@ -12,7 +12,7 @@ from utils.estilos import cargar_css
 
 st.set_page_config(
     page_title="Datos Maestros",
-    page_icon="assets/logo.png",
+    page_icon="assets/icon.png",
     layout="wide"
 )
 
@@ -64,3 +64,11 @@ elif opcion == "ETL":
 elif opcion == "Dashboard":
 
     mostrar_dashboard()
+    
+    #No vacios 
+    #valores no que vayan nulls enters espacios
+    #NINGUN VACIO 
+    #NUMEROS TEL. SIN LETRAS NI CARACTERES ESPECIALES
+    #CORREO FORMATO VALIDO 
+    #RTN/NIT SIN LETRAS NI NULLS    
+    

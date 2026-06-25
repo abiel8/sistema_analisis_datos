@@ -462,3 +462,59 @@ def resumen_validacion_telefono_internacional(df, columna, region_default="HN"):
         "porcentaje_validos": round(validos / total * 100, 2) if total else 0,
         "detalle": diagnostico
     }
+    
+    # ═══════════════════════════════════════════════════════════════
+# Catálogo unificado de tipos de validación por columna
+# ═══════════════════════════════════════════════════════════════
+
+def mascara_email_invalido(df, columna):
+
+    diagnostico = diagnosticar_columna_email(df, columna)
+    return diagnostico != "Válido"
+
+
+def mascara_telefono_invalido(df, columna):
+
+    diagnostico = diagnosticar_columna_telefono_internacional(df, columna, "HN")
+    return diagnostico != "Válido"
+
+
+def mascara_id_con_problema(df, columna):
+
+    return mascara_vacios(df, columna) | mascara_duplicados(df, columna)
+
+
+def mascara_texto_con_problema(df, columna):
+
+    return mascara_vacios(df, columna) | mascara_caracteres_especiales(df, columna)
+
+
+TIPOS_VALIDACION = {
+    "Sin validar": None,
+
+    "Email": {
+        "funcion": mascara_email_invalido,
+        "necesita_parametro": None,
+        "descripcion": "Marca correos con formato inválido"
+    },
+    "Teléfono": {
+        "funcion": mascara_telefono_invalido,
+        "necesita_parametro": None,
+        "descripcion": "Marca teléfonos con formato inválido (HN o internacional)"
+    },
+    "ID (vacíos + duplicados)": {
+        "funcion": mascara_id_con_problema,
+        "necesita_parametro": None,
+        "descripcion": "Marca vacíos o duplicados"
+    },
+    "Texto general (vacíos + símbolos)": {
+        "funcion": mascara_texto_con_problema,
+        "necesita_parametro": None,
+        "descripcion": "Marca vacíos o caracteres especiales"
+    },
+
+    # Se incluyen también todas las condiciones que ya existían en el Dashboard
+    **CONDICIONES_DASHBOARD
+}
+    
+    
