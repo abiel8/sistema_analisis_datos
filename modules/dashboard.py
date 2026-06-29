@@ -1,43 +1,27 @@
-import re
-
 import pandas as pd
 import streamlit as st
 
-from utils.validaciones import CONDICIONES_DASHBOARD, TIPOS_VALIDACION
-from utils.graficos import grafico_pastel
+from utils.carga_archivos import seleccionar_hoja_ui, cargar_dataframe_ui
+from utils.proteccion_tipos import convertir_tipos_preservando_ceros, mostrar_aviso_columnas_protegidas
+from utils.condiciones_dashboard import TIPOS_VALIDACION
+from utils.graficos import grafico_pastel, grafico_resumen_general, config_descarga_png
+from utils.excel_export import generar_excel_consolidado
 
 
-def _columna_tiene_cero_inicial(serie):
+@st.cache_data(show_spinner=False)
+def _evaluar_condicion_cacheada(df, columna, tipo, parametro):
 
-    valores = serie.dropna().astype(str)
+    info = TIPOS_VALIDACION[tipo]
+    funcion = info["funcion"]
 
-    if valores.empty:
-        return False
+    if info.get("necesita_parametro") == "texto":
+        return funcion(df, columna, parametro)
 
-    patron_cero_inicial = re.compile(r"^0\d+$")
+    elif info.get("necesita_parametro") == "numero":
+        return funcion(df, columna, int(parametro))
 
-    return valores.apply(lambda v: bool(patron_cero_inicial.match(v.strip()))).any()
-
-
-def _convertir_tipos_preservando_ceros(df):
-
-    columnas_protegidas = []
-
-    for columna in df.columns:
-
-        serie = df[columna]
-
-        if _columna_tiene_cero_inicial(serie):
-            df[columna] = serie.astype(str).str.strip()
-            columnas_protegidas.append(columna)
-            continue
-
-        try:
-            df[columna] = pd.to_numeric(serie)
-        except (ValueError, TypeError):
-            pass  # Se deja como texto
-
-    return df, columnas_protegidas
+    else:
+        return funcion(df, columna)
 
 
 def mostrar_dashboard():
@@ -52,28 +36,13 @@ def mostrar_dashboard():
     if not archivo:
         return
 
+    archivo_bytes = archivo.getvalue()
+
     # ── Selección de hoja (solo para Excel) ────────────────────
-    hoja_seleccionada = 0
+    hoja_seleccionada = seleccionar_hoja_ui(archivo, archivo_bytes)
 
-    if not archivo.name.endswith(".csv"):
-        try:
-            xls = pd.ExcelFile(archivo)
-            hojas_disponibles = xls.sheet_names
-
-            if len(hojas_disponibles) > 1:
-                hoja_seleccionada = st.selectbox(
-                    "El archivo tiene varias hojas. Seleccione cuál usar:",
-                    options=hojas_disponibles
-                )
-            else:
-                hoja_seleccionada = hojas_disponibles[0]
-
-        except Exception as e:
-            st.error(f"No se pudo leer la lista de hojas del archivo: {e}")
-            return
-
-        finally:
-            archivo.seek(0)
+    if hoja_seleccionada is None:
+        return
 
     # ── Configuración de lectura ───────────────────────────────
     st.subheader("Configuración de lectura")
@@ -98,69 +67,51 @@ def mostrar_dashboard():
 
     filas_a_saltar = list(range(int(fila_encabezado) + 1, int(fila_inicio_datos)))
 
-    try:
-        if archivo.name.endswith(".csv"):
-            df = pd.read_csv(
-                archivo,
-                header=int(fila_encabezado),
-                skiprows=filas_a_saltar,
-                dtype=str
-            )
-        elif archivo.name.endswith(".xls"):
-            df = pd.read_excel(
-                archivo,
-                header=int(fila_encabezado),
-                skiprows=filas_a_saltar,
-                sheet_name=hoja_seleccionada,
-                dtype=str,
-                engine="xlrd"
-            )
-        else:
-            df = pd.read_excel(
-                archivo,
-                header=int(fila_encabezado),
-                skiprows=filas_a_saltar,
-                sheet_name=hoja_seleccionada,
-                dtype=str,
-                engine="openpyxl"
-            )
+    df = cargar_dataframe_ui(archivo, fila_encabezado, filas_a_saltar, hoja_seleccionada)
 
-    except ValueError as e:
-        st.error(
-            "No se pudo leer el archivo con la configuración indicada. "
-            f"Verifique la fila de encabezado y la fila de inicio de datos. Detalle: {e}"
-        )
+    if df is None:
         return
 
-    except ImportError:
-        st.error(
-            "Falta una librería para leer este tipo de archivo. "
-            "Si es un archivo .xls antiguo, instale xlrd con: pip install xlrd"
-        )
-        return
-
-    except Exception as e:
-        st.error(f"Ocurrió un error inesperado al leer el archivo: {e}")
-        return
-
-    if df.empty:
-        st.warning("El archivo se leyó correctamente, pero no contiene datos con esta configuración.")
-        return
-
-    df, columnas_protegidas = _convertir_tipos_preservando_ceros(df)
-
-    if columnas_protegidas:
-        st.info(
-            "Se detectaron y protegieron como texto estas columnas con ceros a la izquierda: "
-            f"{', '.join(columnas_protegidas)}"
-        )
-
-    columnas = df.columns.tolist()
+    df, columnas_protegidas = convertir_tipos_preservando_ceros(df)
+    mostrar_aviso_columnas_protegidas(columnas_protegidas)
 
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
-                
-# ═══════════════════════════════════════════════════════════
+
+    # ── Filtrar antes de transformar ───────────────────────────
+    st.subheader("Filtrar antes de transformar")
+
+    aplicar_filtro_previo = st.checkbox("Filtrar filas antes de aplicar el ETL")
+
+    if aplicar_filtro_previo:
+
+        col_filtro = st.selectbox(
+            "Seleccione la columna para filtrar",
+            options=df.columns.tolist(),
+            key="col_filtro_previo"
+        )
+
+        valores_disponibles = df[col_filtro].dropna().unique().tolist()
+
+        valores_seleccionados = st.multiselect(
+            f"Seleccione el/los valor(es) de '{col_filtro}' a conservar",
+            options=valores_disponibles,
+            key="valores_filtro_previo"
+        )
+
+        if valores_seleccionados:
+            df = df[df[col_filtro].isin(valores_seleccionados)]
+
+            st.success(
+                f"Filtro aplicado: {len(df)} fila(s) coinciden con "
+                f"{', '.join(str(v) for v in valores_seleccionados)} en '{col_filtro}'."
+            )
+        else:
+            st.info("Seleccione al menos un valor para aplicar el filtro.")
+
+    columnas = df.columns.tolist()
+
+    # ═══════════════════════════════════════════════════════════
     # Sección: Validación por columna (todo el archivo de una vez)
     # ═══════════════════════════════════════════════════════════
 
@@ -205,7 +156,13 @@ def mostrar_dashboard():
                     )
 
     ejecutar_analisis = st.button("Analizar todas las columnas marcadas")
-    
+
+    # Acumula el resultado de cada columna para la descarga consolidada
+    resultados_para_excel = {}
+
+    # Acumula el % de error de cada columna para el gráfico general final
+    resumen_porcentajes = []
+
     if ejecutar_analisis and asignaciones:
 
         for col, tipos in asignaciones.items():
@@ -213,13 +170,11 @@ def mostrar_dashboard():
             st.markdown(f"### {col} — *{', '.join(tipos)}*")
 
             try:
-                # Evaluar cada condición por separado
                 mascaras_individuales = {}
 
                 for tipo in tipos:
 
                     info = TIPOS_VALIDACION[tipo]
-                    funcion = info["funcion"]
 
                     if info.get("necesita_parametro") == "texto":
                         texto = parametros_asignacion.get((col, tipo), "")
@@ -228,20 +183,20 @@ def mostrar_dashboard():
                             st.info(f"Escriba un texto a buscar para '{tipo}' en '{col}'.")
                             continue
 
-                        mascaras_individuales[tipo] = funcion(df, col, texto)
+                        mascaras_individuales[tipo] = _evaluar_condicion_cacheada(df, col, tipo, texto)
 
                     elif info.get("necesita_parametro") == "numero":
                         numero = int(parametros_asignacion.get((col, tipo), 10))
-                        mascaras_individuales[tipo] = funcion(df, col, numero)
+                        mascaras_individuales[tipo] = _evaluar_condicion_cacheada(df, col, tipo, numero)
 
                     else:
-                        mascaras_individuales[tipo] = funcion(df, col)
+                        mascaras_individuales[tipo] = _evaluar_condicion_cacheada(df, col, tipo, None)
 
                 if not mascaras_individuales:
                     continue
 
-                # Clasificar cada fila: la primera condición que cumple, en
-                # el orden en que el usuario las seleccionó
+                # Clasificar cada fila con la primera condición que cumple,
+                # en el orden en que el usuario las seleccionó
                 categoria_por_fila = pd.Series("Correcto", index=df.index)
 
                 for tipo, mascara in mascaras_individuales.items():
@@ -255,6 +210,17 @@ def mostrar_dashboard():
 
                 cantidad_total = len(df)
                 conteo["porcentaje"] = round(conteo["cantidad"] / cantidad_total * 100, 2)
+
+                cantidad_errores_columna = int((categoria_por_fila != "Correcto").sum())
+                porcentaje_error_columna = (
+                    round(cantidad_errores_columna / cantidad_total * 100, 2)
+                    if cantidad_total else 0
+                )
+
+                resumen_porcentajes.append({
+                    "columna": col,
+                    "porcentaje_error": porcentaje_error_columna
+                })
 
                 col_metric, col_chart = st.columns([1, 2])
 
@@ -282,25 +248,46 @@ def mostrar_dashboard():
                     df_mostrar = df_mostrar[df_mostrar["categoria_error"] != "Correcto"]
 
                 with st.expander(f"Ver filas de '{col}' ({len(df_mostrar)} filas)"):
-
                     st.dataframe(df_mostrar, use_container_width=True)
 
-                    if not df_mostrar.empty:
-                        csv_col = df_mostrar.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label=f"Descargar filas de '{col}' (.csv)",
-                            data=csv_col,
-                            file_name=f"filas_{col}.csv",
-                            mime="text/csv",
-                            key=f"descargar_col_{col}"
-                        )
+                # Para el Excel final: solo las filas con error en ESTA
+                # columna específica (no las correctas), con la fila completa
+                resultados_para_excel[col] = df_con_categoria[
+                    df_con_categoria["categoria_error"] != "Correcto"
+                ]
 
                 st.divider()
 
             except Exception as e:
                 st.error(f"No se pudo validar la columna '{col}': {e}")
 
-   
+        # ── Gráfico general: % de error por columna analizada ──────
+        if resumen_porcentajes:
+
+            st.subheader("Resumen general")
+
+            fig_general = grafico_resumen_general(resumen_porcentajes)
+            config = config_descarga_png("resumen_general_calidad_datos")
+
+            st.plotly_chart(fig_general, use_container_width=True, config=config)
+            st.caption(
+                "Pase el cursor sobre el gráfico y use el ícono de cámara "
+                "en la barra superior para descargarlo como PNG."
+            )
+
+        # ── Descarga consolidada: un solo Excel, una hoja por columna ───
+        if resultados_para_excel:
+
+            st.subheader("Descargar todo")
+
+            excel_bytes = generar_excel_consolidado(resultados_para_excel)
+
+            st.download_button(
+                label="Descargar Excel con todas las columnas analizadas",
+                data=excel_bytes,
+                file_name="analisis_calidad_datos.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
     elif ejecutar_analisis and not asignaciones:
         st.info("No marcó ninguna columna con condiciones de validación.")
