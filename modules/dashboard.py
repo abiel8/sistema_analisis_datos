@@ -1,10 +1,9 @@
 import pandas as pd
 import streamlit as st
 
-from utils.carga_archivos import seleccionar_hoja_ui, cargar_dataframe_ui
-from utils.proteccion_tipos import convertir_tipos_preservando_ceros, mostrar_aviso_columnas_protegidas
+from utils.sesion_archivo import obtener_dataframe_sesion
 from utils.condiciones_dashboard import TIPOS_VALIDACION
-from utils.graficos import grafico_pastel, grafico_resumen_general, config_descarga_png
+from utils.graficos import grafico_pastel, grafico_pastel_con_cantidades, grafico_resumen_general, config_descarga_png
 from utils.excel_export import generar_excel_consolidado
 
 
@@ -28,55 +27,23 @@ def mostrar_dashboard():
 
     st.header("Dashboard")
 
-    archivo = st.file_uploader(
-        "Seleccione un archivo",
-        type=["xlsx", "csv", "xls"]
+    df = obtener_dataframe_sesion(
+        descripcion_modulo=(
+            "Suba un archivo, marque las columnas que quiera validar (email, "
+            "teléfono, vacíos, duplicados, etc.) y obtenga gráficos comparativos "
+            "más un Excel descargable con el detalle de cada error."
+        )
     )
-
-    if not archivo:
-        return
-
-    archivo_bytes = archivo.getvalue()
-
-    # ── Selección de hoja (solo para Excel) ────────────────────
-    hoja_seleccionada = seleccionar_hoja_ui(archivo, archivo_bytes)
-
-    if hoja_seleccionada is None:
-        return
-
-    # ── Configuración de lectura ───────────────────────────────
-    st.subheader("Configuración de lectura")
-
-    col_a, col_b = st.columns(2)
-
-    fila_encabezado = col_a.number_input(
-        "¿En qué fila está el encabezado? (0 = primera fila)",
-        min_value=0,
-        max_value=50,
-        value=0,
-        step=1
-    )
-
-    fila_inicio_datos = col_b.number_input(
-        "¿En qué fila empiezan los datos?",
-        min_value=int(fila_encabezado) + 1,
-        max_value=100,
-        value=int(fila_encabezado) + 1,
-        step=1
-    )
-
-    filas_a_saltar = list(range(int(fila_encabezado) + 1, int(fila_inicio_datos)))
-
-    df = cargar_dataframe_ui(archivo, fila_encabezado, filas_a_saltar, hoja_seleccionada)
 
     if df is None:
         return
 
-    df, columnas_protegidas = convertir_tipos_preservando_ceros(df)
-    mostrar_aviso_columnas_protegidas(columnas_protegidas)
-
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
+
+    # Espacio reservado: el pastel "Bueno/Malo" se llena al final del
+    # análisis, pero se muestra aquí arriba, antes de todo lo demás
+    placeholder_pastel_general = st.empty()
 
     # ── Filtrar antes de transformar ───────────────────────────
     st.subheader("Filtrar antes de transformar")
@@ -117,43 +84,71 @@ def mostrar_dashboard():
 
     st.subheader("Validación de todas las columnas")
 
-    st.caption("Para cada columna que quiera analizar, seleccione una o más condiciones.")
+    st.caption("Marque las columnas que quiera analizar.")
+
+    # ── Grilla horizontal de checkboxes, una columna de Streamlit por cada
+    # columna del archivo, agrupadas en filas de máximo 5 ────────────────
+    MAXIMO_POR_FILA = 5
+    columnas_marcadas = []
+
+    for inicio in range(0, len(columnas), MAXIMO_POR_FILA):
+
+        bloque = columnas[inicio:inicio + MAXIMO_POR_FILA]
+        cols_streamlit = st.columns(len(bloque))
+
+        for col_streamlit, col in zip(cols_streamlit, bloque):
+
+            marcada = col_streamlit.checkbox(col, key=f"marcar_{col}")
+
+            if marcada:
+                columnas_marcadas.append(col)
+
+    st.divider()
+
+    # ── Configuración (groupbox) solo para las columnas marcadas ────────
 
     opciones_tipo = [t for t in TIPOS_VALIDACION.keys() if t != "Sin validar"]
 
     asignaciones = {}
     parametros_asignacion = {}
 
-    for col in columnas:
+    if not columnas_marcadas:
+        st.info("Marque al menos una columna arriba para visualizar sus condiciones.")
 
-        tipos_elegidos = st.multiselect(
-            col,
-            options=opciones_tipo,
-            key=f"tipos_validacion_{col}"
-        )
+    for col in columnas_marcadas:
 
-        if tipos_elegidos:
+        with st.container(border=True):
 
-            asignaciones[col] = tipos_elegidos
+            st.markdown(f"**{col}**")
 
-            for tipo in tipos_elegidos:
+            tipos_elegidos = st.multiselect(
+                "Condiciones a evaluar",
+                options=opciones_tipo,
+                key=f"tipos_validacion_{col}"
+            )
 
-                info = TIPOS_VALIDACION[tipo]
+            if tipos_elegidos:
 
-                if info and info.get("necesita_parametro") == "texto":
-                    parametros_asignacion[(col, tipo)] = st.text_input(
-                        f"Texto a buscar para '{tipo}' en '{col}'",
-                        key=f"param_texto_{col}_{tipo}"
-                    )
+                asignaciones[col] = tipos_elegidos
 
-                elif info and info.get("necesita_parametro") == "numero":
-                    parametros_asignacion[(col, tipo)] = st.number_input(
-                        f"Valor N para '{tipo}' en '{col}'",
-                        min_value=1,
-                        value=10,
-                        step=1,
-                        key=f"param_numero_{col}_{tipo}"
-                    )
+                for tipo in tipos_elegidos:
+
+                    info = TIPOS_VALIDACION[tipo]
+
+                    if info and info.get("necesita_parametro") == "texto":
+                        parametros_asignacion[(col, tipo)] = st.text_input(
+                            f"Texto a buscar para '{tipo}'",
+                            key=f"param_texto_{col}_{tipo}"
+                        )
+
+                    elif info and info.get("necesita_parametro") == "numero":
+                        parametros_asignacion[(col, tipo)] = st.number_input(
+                            f"Valor N para '{tipo}'",
+                            min_value=1,
+                            value=10,
+                            step=1,
+                            key=f"param_numero_{col}_{tipo}"
+                        )
 
     ejecutar_analisis = st.button("Analizar todas las columnas marcadas")
 
@@ -163,9 +158,21 @@ def mostrar_dashboard():
     # Acumula el % de error de cada columna para el gráfico general final
     resumen_porcentajes = []
 
+    # Acumula, a nivel de TODO el archivo, qué filas tuvieron error en
+    # al menos una de las columnas analizadas (para el pastel simple)
+    mascara_alguna_columna_mala = pd.Series(False, index=df.index)
+
     if ejecutar_analisis and asignaciones:
 
-        for col, tipos in asignaciones.items():
+        barra_progreso = st.progress(0, text="Analizando columnas...")
+        total_columnas_a_procesar = len(asignaciones)
+
+        for indice_actual, (col, tipos) in enumerate(asignaciones.items()):
+
+            barra_progreso.progress(
+                (indice_actual) / total_columnas_a_procesar,
+                text=f"Analizando '{col}' ({indice_actual + 1} de {total_columnas_a_procesar})..."
+            )
 
             st.markdown(f"### {col} — *{', '.join(tipos)}*")
 
@@ -222,6 +229,8 @@ def mostrar_dashboard():
                     "porcentaje_error": porcentaje_error_columna
                 })
 
+                mascara_alguna_columna_mala |= (categoria_por_fila != "Correcto")
+
                 col_metric, col_chart = st.columns([1, 2])
 
                 with col_metric:
@@ -260,6 +269,58 @@ def mostrar_dashboard():
 
             except Exception as e:
                 st.error(f"No se pudo validar la columna '{col}': {e}")
+
+        barra_progreso.progress(1.0, text="Análisis completo.")
+        barra_progreso.empty()
+
+        # ── Pastel simple arriba: % bueno vs % malo de todo el archivo ──
+        cantidad_total_archivo = len(df)
+        cantidad_filas_malas = int(mascara_alguna_columna_mala.sum())
+        cantidad_filas_buenas = cantidad_total_archivo - cantidad_filas_malas
+
+        df_pastel_general = pd.DataFrame({
+            "categoria": ["Bueno", "Malo"],
+            "cantidad": [cantidad_filas_buenas, cantidad_filas_malas]
+        })
+
+        with placeholder_pastel_general.container():
+            st.subheader("Resultado general")
+
+            fig_simple = grafico_pastel_con_cantidades(
+                df_pastel_general, "categoria", "cantidad",
+                titulo=f"Total de registros: {cantidad_total_archivo}"
+            )
+
+            config_pastel_general = config_descarga_png("resultado_general")
+
+            st.plotly_chart(
+                fig_simple, use_container_width=True,
+                config=config_pastel_general, key="chart_general_simple"
+            )
+
+            porcentaje_bueno = round(cantidad_filas_buenas / cantidad_total_archivo * 100, 1) if cantidad_total_archivo else 0
+            st.caption(
+                f"{porcentaje_bueno}% de las filas no tuvieron ningún error en las "
+                f"columnas analizadas ({len(asignaciones)} columna(s)). "
+                "Use el ícono de cámara para descargar este gráfico como PNG."
+            )
+
+        # ── Resumen claro de lo que se encontró, antes del detalle ─
+        total_filas_con_error = sum(len(df_res) for df_res in resultados_para_excel.values())
+        columnas_sin_ningun_error = [
+            fila["columna"] for fila in resumen_porcentajes
+            if fila["porcentaje_error"] == 0
+        ]
+
+        st.success(
+            f"**Análisis completo:** {len(asignaciones)} columna(s) revisada(s), "
+            f"{total_filas_con_error} registro(s) con algún error encontrado en total."
+        )
+
+        if columnas_sin_ningun_error:
+            st.caption(
+                "Sin errores en: " + ", ".join(f"**{c}**" for c in columnas_sin_ningun_error)
+            )
 
         # ── Gráfico general: % de error por columna analizada ──────
         if resumen_porcentajes:

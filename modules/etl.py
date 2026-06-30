@@ -3,8 +3,7 @@ import io
 import streamlit as st
 import pandas as pd
 
-from utils.carga_archivos import seleccionar_hoja_ui, leer_vista_cruda, cargar_dataframe_ui
-from utils.proteccion_tipos import convertir_tipos_preservando_ceros, mostrar_aviso_columnas_protegidas
+from utils.sesion_archivo import obtener_dataframe_sesion
 from utils.limpieza_texto import limpiar_texto_columna, limpiar_nombres_columnas
 from utils.paises import columna_a_codigo_pais
 
@@ -13,49 +12,14 @@ def mostrar_etl():
 
     st.header("ETL")
 
-    archivo = st.file_uploader(
-        "Seleccione un archivo",
-        type=["xlsx", "csv", "xls"]
-    )
+    df_original = obtener_dataframe_sesion(permitir_filas_a_saltar=False)
 
-    if not archivo:
+    if df_original is None:
         return
 
-    archivo_bytes = archivo.getvalue()
-
-    # ── Selección de hoja (solo para Excel) ────────────────────
-    hoja_seleccionada = seleccionar_hoja_ui(archivo, archivo_bytes)
-
-    if hoja_seleccionada is None:
-        return
-
-    # ── Configuración de lectura ───────────────────────────────
-    st.subheader("Configuración de lectura")
-
-    fila_encabezado = st.number_input(
-        "¿En qué fila están los encabezados? (0 = primera fila)",
-        min_value=0,
-        max_value=50,
-        value=0,
-        step=1,
-        help="Si tu Excel tiene títulos o metadatos arriba, indica cuántas filas saltarse."
-    )
-
-    # Vista previa cruda para que el usuario identifique la fila correcta
-    with st.expander("Ver archivo crudo (sin procesar)"):
-        try:
-            df_crudo = leer_vista_cruda(archivo_bytes, archivo.name, hoja_seleccionada)
-            st.dataframe(df_crudo, use_container_width=True)
-        except Exception as e:
-            st.warning(f"No se pudo generar la vista previa cruda: {e}")
-
-    df = cargar_dataframe_ui(archivo, fila_encabezado, [], hoja_seleccionada)
-
-    if df is None:
-        return
-
-    df, columnas_protegidas = convertir_tipos_preservando_ceros(df)
-    mostrar_aviso_columnas_protegidas(columnas_protegidas)
+    # Se trabaja sobre una copia: el ETL no debe alterar el DataFrame que
+    # está en sesión hasta que el usuario decida explícitamente actualizarlo
+    df = df_original.copy()
 
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
@@ -226,3 +190,15 @@ def mostrar_etl():
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
+
+    st.divider()
+
+    if st.button(
+        "Usar este resultado en Calidad de Datos y Dashboard",
+        help="Reemplaza el archivo cargado en sesión por esta versión transformada."
+    ):
+        st.session_state["df_actual"] = df
+        st.success(
+            "Listo. Calidad de Datos y Dashboard ahora usarán esta versión "
+            "transformada del archivo."
+        )

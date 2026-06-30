@@ -1,7 +1,6 @@
 import streamlit as st
 
-from utils.carga_archivos import seleccionar_hoja_ui, cargar_dataframe_ui
-from utils.proteccion_tipos import convertir_tipos_preservando_ceros, mostrar_aviso_columnas_protegidas
+from utils.sesion_archivo import obtener_dataframe_sesion
 from utils.metricas_calidad import (
     contar_vacios, contar_duplicados, contar_unicos, longitud_mayor,
     contiene_numeros, contiene_letras, solo_numeros, solo_letras,
@@ -15,54 +14,10 @@ def mostrar_calidad_datos():
 
     st.header("Calidad de Datos")
 
-    archivo = st.file_uploader(
-        "Seleccione un archivo",
-        type=["xlsx", "csv", "xls"]
-    )
-
-    if not archivo:
-        return
-
-    archivo_bytes = archivo.getvalue()
-
-    # ── Selección de hoja (solo para Excel) ────────────────────
-    hoja_seleccionada = seleccionar_hoja_ui(archivo, archivo_bytes)
-
-    if hoja_seleccionada is None:
-        return
-
-    # ── Configuración de lectura ───────────────────────────────
-    st.subheader("Configuración de lectura")
-
-    col_a, col_b = st.columns(2)
-
-    fila_encabezado = col_a.number_input(
-        "¿En qué fila está el encabezado? (0 = primera fila)",
-        min_value=0,
-        max_value=50,
-        value=0,
-        step=1,
-        help="Indica en qué fila (contando desde 0) están los nombres de columna."
-    )
-
-    fila_inicio_datos = col_b.number_input(
-        "¿En qué fila empiezan los datos?",
-        min_value=int(fila_encabezado) + 1,
-        max_value=100,
-        value=int(fila_encabezado) + 1,
-        step=1,
-        help="Por defecto es la fila siguiente al encabezado. Si hay filas vacías de separación, ajusta aquí."
-    )
-
-    filas_a_saltar = list(range(int(fila_encabezado) + 1, int(fila_inicio_datos)))
-
-    df = cargar_dataframe_ui(archivo, fila_encabezado, filas_a_saltar, hoja_seleccionada)
+    df = obtener_dataframe_sesion()
 
     if df is None:
         return
-
-    df, columnas_protegidas = convertir_tipos_preservando_ceros(df)
-    mostrar_aviso_columnas_protegidas(columnas_protegidas)
 
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)

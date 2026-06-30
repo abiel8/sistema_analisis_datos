@@ -23,6 +23,22 @@ def grafico_pastel(df, nombres, valores):
     return px.pie(df, names=nombres, values=valores)
 
 
+def grafico_pastel_con_cantidades(df, nombres, valores, titulo=None):
+    """Pastel donde cada porción muestra 'etiqueta: cantidad' directamente
+    sobre el gráfico, para que esos números queden incluidos al exportar
+    la imagen como PNG (las métricas de Streamlit no se capturan en la
+    descarga, pero el texto dentro de la figura sí)."""
+
+    fig = px.pie(df, names=nombres, values=valores, title=titulo)
+
+    fig.update_traces(
+        textinfo="label+value",
+        texttemplate="%{label}: %{value}"
+    )
+
+    return fig
+
+
 def grafico_dispersion(df, x, y):
 
     return px.scatter(df, x=x, y=y)

@@ -3,7 +3,6 @@ import streamlit as st
 from modules.dashboard import mostrar_dashboard
 from modules.calidad_datos import mostrar_calidad_datos
 from modules.etl import mostrar_etl
-#from modules.reglas_dinamicas import mostrar_reglas_dinamicas
 from utils.estilos import cargar_css
 
 
