@@ -14,14 +14,14 @@ def dividir_nombre_apellido(serie):
 
     def _dividir(valor):
         if pd.isna(valor) or str(valor).strip() == "":
-            return pd.Series({"Nombre 1": None, "Nombre 2 ": None})
+            return pd.Series({"nombre": None, "apellido": None})
 
         partes = str(valor).strip().split(None, 1)  # split en el primer espacio
 
         nombre = partes[0] if len(partes) >= 1 else None
         apellido = partes[1] if len(partes) >= 2 else None
 
-        return pd.Series({"Nombre 1": nombre, "Nombre 2 ": apellido})
+        return pd.Series({"nombre": nombre, "apellido": apellido})
 
     return serie.apply(_dividir)
 

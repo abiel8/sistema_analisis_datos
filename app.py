@@ -7,7 +7,7 @@ from utils.estilos import cargar_css
 
 
 st.set_page_config(
-    page_title="Datos Maestros",
+    page_title="VMD",
     page_icon="assets/logo.png",
     layout="wide"
 )
@@ -20,7 +20,7 @@ with st.sidebar:
     st.image("assets/logo.png", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-st.title("Gobernanza de Datos")
+st.title("VALIDADOR DE MIGRACIÓN DE DATOS (VMD)")
 
 opcion = st.sidebar.selectbox(
 

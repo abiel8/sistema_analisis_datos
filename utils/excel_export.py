@@ -44,14 +44,19 @@ def generar_excel_consolidado(resultados_por_columna):
         for nombre_columna, df_resultado in resultados_por_columna.items():
 
             nombre_hoja = nombre_hoja_valido(nombre_columna, nombres_usados)
-            df_resultado.to_excel(writer, sheet_name=nombre_hoja, index=False)
+
+            # Quitar fila_excel antes de exportar — es una columna interna
+            # de referencia, no parte del archivo original del usuario
+            df_exportar = df_resultado.drop(columns=["fila_excel"], errors="ignore")
+
+            df_exportar.to_excel(writer, sheet_name=nombre_hoja, index=False)
 
             worksheet = writer.sheets[nombre_hoja]
 
-            if nombre_columna in df_resultado.columns:
+            if nombre_columna in df_exportar.columns:
 
-                indice_columna = df_resultado.columns.get_loc(nombre_columna) + 1
-                total_filas = len(df_resultado)
+                indice_columna = df_exportar.columns.get_loc(nombre_columna) + 1
+                total_filas = len(df_exportar)
 
                 for fila in range(1, total_filas + 2):  # +2: encabezado + 1-indexed
                     worksheet.cell(row=fila, column=indice_columna).fill = _COLOR_RESALTADO
