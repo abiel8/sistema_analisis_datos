@@ -27,8 +27,8 @@ opcion = st.sidebar.selectbox(
     "Seleccione módulo",
 
     [
-        "Calidad de Datos",
         "ETL",
+        "Calidad de Datos",
         "Dashboard"
     ]
 )

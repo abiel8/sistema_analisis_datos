@@ -96,7 +96,10 @@ def _diagnosticar_telefono_internacional(valor, region_default="HN"):
     elif len(solo_digitos) > 8:
         texto_a_parsear = "+" + solo_digitos
     else:
-        texto_a_parsear = texto_original
+        # Número de 8 dígitos sin código de país: usar validación local HN
+        # en vez de phonenumbers, porque su base de datos tiene los rangos
+        # de números fijos de Honduras (prefijo 2x) desactualizados
+        return _diagnosticar_telefono_hn(valor)
 
     try:
         numero = phonenumbers.parse(texto_a_parsear, region_default)
@@ -117,6 +120,15 @@ def _diagnosticar_telefono_internacional(valor, region_default="HN"):
 
         else:
             return "Formato no reconocido"
+
+    # phonenumbers tiene los rangos de números fijos de Honduras (prefijo 2x)
+    # desactualizados — si el número parseado es de Honduras y tiene 8 dígitos
+    # con prefijo 2, lo validamos con nuestra lógica local en vez de rechazarlo
+    numero_nacional = str(numero.national_number)
+    es_numero_hn = phonenumbers.region_code_for_number(numero) == "HN"
+
+    if es_numero_hn and len(numero_nacional) == 8 and numero_nacional[0] == "2":
+        return _diagnosticar_telefono_hn(numero_nacional)
 
     if not phonenumbers.is_valid_number(numero):
         return "Número con formato inválido para su país"
