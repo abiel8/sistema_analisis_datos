@@ -14,34 +14,31 @@ st.set_page_config(
 
 cargar_css("static/styles.css")
 
-# ── Logo en la barra lateral, con fondo propio para contraste ───
-with st.sidebar:
-    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
-    st.image("assets/logo.png", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+# ── Logo en el área beige, arriba a la izquierda ────────────────
+col_logo, col_titulo = st.columns([1, 4])
 
-st.title("VALIDADOR DE MIGRACIÓN DE DATOS (VMD)")
+with col_logo:
+    st.image("assets/Universidad-Zamorano-Logo-1024x220.png", use_container_width=True)
 
-opcion = st.sidebar.selectbox(
+with col_titulo:
+    st.title("VALIDADOR DE MIGRACIÓN DE DATOS (VMD)")
 
-    "Seleccione módulo",
-
+opcion = st.sidebar.radio(
+    "Módulo",
     [
-        "ETL",
+        "Metodos",
         "Calidad de Datos",
         "Dashboard"
     ]
 )
 
 if opcion == "Calidad de Datos":
-
     mostrar_calidad_datos()
 
-elif opcion == "ETL":
-
+elif opcion == "Metodos":
     mostrar_etl()
 
-
 elif opcion == "Dashboard":
-
     mostrar_dashboard()
+    
+    

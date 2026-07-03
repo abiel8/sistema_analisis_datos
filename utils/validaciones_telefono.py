@@ -39,28 +39,6 @@ def _diagnosticar_telefono_hn(valor):
     return "Válido"
 
 
-def diagnosticar_columna_telefono(df, columna):
-
-    return df[columna].apply(_diagnosticar_telefono_hn)
-
-
-def resumen_validacion_telefono(df, columna):
-
-    diagnostico = diagnosticar_columna_telefono(df, columna)
-
-    total = len(diagnostico)
-    validos = (diagnostico == "Válido").sum()
-    invalidos = total - validos
-
-    return {
-        "total": total,
-        "validos": validos,
-        "invalidos": invalidos,
-        "porcentaje_validos": round(validos / total * 100, 2) if total else 0,
-        "detalle": diagnostico
-    }
-
-
 # ═══════════════════════════════════════════════════════════════
 # Validación internacional con phonenumbers.
 # Detecta automáticamente si es nacional (8 dígitos) o ya trae

@@ -6,17 +6,6 @@ import pandas as pd
 _PATRON_EMAIL = re.compile(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
 
 
-def validar_email(df, columna):
-    """Cuenta cuántos valores NO cumplen el formato de email (versión simple,
-    sin diagnóstico detallado)."""
-
-    return (
-        ~df[columna]
-        .astype(str)
-        .str.match(_PATRON_EMAIL)
-    ).sum()
-
-
 def _diagnosticar_email(valor):
 
     if pd.isna(valor) or str(valor).strip() == "":

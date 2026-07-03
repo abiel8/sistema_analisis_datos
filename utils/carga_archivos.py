@@ -12,27 +12,6 @@ def listar_hojas(archivo_bytes):
     return xls.sheet_names
 
 
-@st.cache_data(show_spinner=False)
-def leer_vista_cruda(archivo_bytes, nombre_archivo, hoja_seleccionada, nrows=15):
-    """Lee las primeras filas sin encabezado, para que el usuario identifique
-    en qué fila está su encabezado real."""
-
-    if nombre_archivo.endswith(".csv"):
-        return pd.read_csv(io.BytesIO(archivo_bytes), header=None, nrows=nrows)
-
-    elif nombre_archivo.endswith(".xls"):
-        return pd.read_excel(
-            io.BytesIO(archivo_bytes), header=None, nrows=nrows,
-            sheet_name=hoja_seleccionada, engine="xlrd"
-        )
-
-    else:
-        return pd.read_excel(
-            io.BytesIO(archivo_bytes), header=None, nrows=nrows,
-            sheet_name=hoja_seleccionada, engine="openpyxl"
-        )
-
-
 @st.cache_data(show_spinner="Leyendo archivo...")
 def leer_dataframe(archivo_bytes, nombre_archivo, fila_encabezado, filas_a_saltar, hoja_seleccionada):
     """Lee el archivo completo como texto (dtype=str), respetando la fila de

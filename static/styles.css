@@ -1,16 +1,18 @@
 .stApp {
-    background-color: #FFF4E5;
+    /*background-color: #FFF4E5;*/
+    background-color: #FFFFFF;
+
 }
 
 
 
 /* Header superior de Streamlit (barra con Rerun, menú, etc.) */
 [data-testid="stHeader"] {
-    background-color: #FFF4E5;
+    background-color: #FFFFFF;
 }
 
 [data-testid="stToolbar"] {
-    background-color: #FFF4E5;
+    background-color: #FFFFFF;
 }
 
 /* Título principal en negro */
@@ -37,14 +39,7 @@ h2, h3, h2 span, h3 span {
     color: #FFFFFF !important;
 }
 
-/* Recuadro de fondo para el logo, para que se note sobre el verde */
-.logo-container {
-    background-color: #FFF4E5;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
-    text-align: center;
-}
+
 
 /* File uploader: caja contenedora */
 [data-testid="stFileUploader"] section {
@@ -98,3 +93,43 @@ h2, h3, h2 span, h3 span {
     background-color: #036b39;
     color: #FFFFFF;
 }
+
+/* Logo: sin bordes redondeados */
+[data-testid="stImage"] img {
+    border-radius: 0px !important;
+}
+
+/* Contenedor del logo: sin padding extra */
+[data-testid="stImage"] {
+    padding: 0px;
+}
+
+/* Barra lateral más angosta */
+[data-testid="stSidebar"] {
+    min-width: 180px !important;
+    max-width: 180px !important;
+}
+
+/* Logo: sin bordes redondeados */
+[data-testid="stImage"] img {
+    border-radius: 0px !important;
+}
+
+/* Radio buttons de navegación: estilo limpio sobre fondo verde */
+[data-testid="stSidebar"] .stRadio label {
+    color: #FFFFFF !important;
+    font-size: 15px;
+    padding: 6px 0px;
+    cursor: pointer;
+}
+
+[data-testid="stSidebar"] .stRadio label:hover {
+    color: #FFF4E5 !important;
+}
+
+/* Ocultar el título del radio ("Módulo") si se prefiere más limpio */
+[data-testid="stSidebar"] .stRadio > label:first-child {
+    font-size: 12px;
+    opacity: 0.7;
+}
+

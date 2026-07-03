@@ -8,13 +8,22 @@ from utils.metricas_calidad import (
 )
 from utils.validaciones_email import resumen_validacion_email
 from utils.validaciones_telefono import resumen_validacion_telefono_internacional
+from utils.plantillas import (
+    guardar_plantilla_calidad, cargar_plantilla_calidad,
+    listar_plantillas, eliminar_plantilla, nombre_plantilla_existe
+)
 
 
 def mostrar_calidad_datos():
 
     st.header("Calidad de Datos")
 
-    df = obtener_dataframe_sesion()
+    df = obtener_dataframe_sesion(
+        descripcion_modulo=(
+            "Suba un archivo y elija una columna para revisar vacíos, duplicados, "
+            "formato de texto, y validar correos o números telefónicos."
+        )
+    )
 
     if df is None:
         return
@@ -22,10 +31,76 @@ def mostrar_calidad_datos():
     st.subheader("Vista previa")
     st.dataframe(df.head(20), use_container_width=True)
 
+    # ── Plantillas ──────────────────────────────────────────────
+    plantillas_disponibles = listar_plantillas(tipo="calidad")
+    plantilla_activa = {}
+
+    with st.expander("Plantillas", expanded=False):
+
+        col_p1, col_p2, col_p3 = st.columns([3, 1, 1])
+        nombres_plantillas = [p["nombre"] for p in plantillas_disponibles]
+
+        if nombres_plantillas:
+
+            plantilla_elegida = col_p1.selectbox(
+                "Plantillas guardadas",
+                options=["— Seleccione una plantilla —"] + nombres_plantillas,
+                key="plantilla_seleccionada_calidad"
+            )
+
+            if col_p2.button("Cargar", key="btn_cargar_calidad", use_container_width=True):
+                if plantilla_elegida != "— Seleccione una plantilla —":
+                    datos = cargar_plantilla_calidad(plantilla_elegida)
+                    if datos:
+                        st.session_state["plantilla_calidad_activa"] = datos
+                        st.success(f"Plantilla '{plantilla_elegida}' cargada.")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo cargar la plantilla.")
+
+            if col_p3.button("Eliminar", key="btn_eliminar_calidad", use_container_width=True):
+                if plantilla_elegida != "— Seleccione una plantilla —":
+                    eliminar_plantilla(plantilla_elegida)
+                    st.session_state.pop("plantilla_calidad_activa", None)
+                    st.success(f"Plantilla '{plantilla_elegida}' eliminada.")
+                    st.rerun()
+
+        else:
+            col_p1.caption("No hay plantillas guardadas aún.")
+
+        st.divider()
+
+        col_n1, col_n2 = st.columns([3, 1])
+        nombre_nueva = col_n1.text_input(
+            "Nombre para guardar la configuración actual como plantilla",
+            placeholder="ej: Revisión de Contactos",
+            key="nombre_nueva_plantilla_calidad"
+        )
+
+        if col_n2.button("Guardar", key="btn_guardar_calidad", use_container_width=True):
+            if nombre_nueva.strip():
+                col_actual = st.session_state.get("columna_calidad_actual", df.columns[0])
+                email_actual = st.session_state.get("check_validar_email", False)
+                tel_actual = st.session_state.get("check_validar_telefono", False)
+                ya_existe = nombre_plantilla_existe(nombre_nueva.strip())
+                guardar_plantilla_calidad(nombre_nueva.strip(), col_actual, email_actual, tel_actual)
+                msg = "actualizada" if ya_existe else "guardada"
+                st.success(f"Plantilla '{nombre_nueva.strip()}' {msg}.")
+                st.rerun()
+            else:
+                st.warning("Escriba un nombre para la plantilla.")
+
+    plantilla_activa = st.session_state.get("plantilla_calidad_activa", {})
+
     # ── Selección de columna ────────────────────────────────────
+    col_default = plantilla_activa.get("columna", df.columns[0])
+    col_index = list(df.columns).index(col_default) if col_default in df.columns else 0
+
     columna = st.selectbox(
         "Seleccione una columna para analizar",
-        df.columns
+        df.columns,
+        index=col_index,
+        key="columna_calidad_actual"
     )
 
     # ═══════════════════════════════════════════════════════════
@@ -62,7 +137,8 @@ def mostrar_calidad_datos():
 
     validar_correos = st.checkbox(
         f"Validar formato de correos en la columna '{columna}'",
-        key="check_validar_email"
+        key="check_validar_email",
+        value=plantilla_activa.get("validar_email", False)
     )
 
     if validar_correos:
@@ -114,7 +190,8 @@ def mostrar_calidad_datos():
 
     validar_telefonos = st.checkbox(
         f"Validar formato de teléfono en la columna '{columna}'",
-        key="check_validar_telefono"
+        key="check_validar_telefono",
+        value=plantilla_activa.get("validar_telefono", False)
     )
 
     if validar_telefonos:

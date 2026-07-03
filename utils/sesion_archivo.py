@@ -4,22 +4,6 @@ from utils.carga_archivos import seleccionar_hoja_ui, cargar_dataframe_ui
 from utils.proteccion_tipos import convertir_tipos_preservando_ceros, mostrar_aviso_columnas_protegidas
 
 
-def _mismo_archivo(archivo_nuevo):
-    """Compara el archivo recién subido contra el que ya está en sesión,
-    usando nombre + tamaño como huella simple (suficiente para detectar
-    si el usuario subió un archivo distinto)."""
-
-    anterior = st.session_state.get("archivo_info")
-
-    if anterior is None:
-        return False
-
-    return (
-        anterior["nombre"] == archivo_nuevo.name
-        and anterior["tamano"] == archivo_nuevo.size
-    )
-
-
 def _guardar_en_sesion(df, archivo, hoja_seleccionada, columnas_protegidas):
 
     st.session_state["df_actual"] = df

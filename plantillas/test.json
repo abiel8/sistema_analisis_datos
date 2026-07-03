@@ -1,0 +1,23 @@
+{
+  "tipo": "dashboard",
+  "nombre": "test",
+  "fecha": "02/07/2026 08:29",
+  "asignaciones": {
+    "pro_codigo": [
+      "Vacíos",
+      "Duplicados"
+    ],
+    "pro_nit": [
+      "Vacíos",
+      "Duplicados",
+      "Contiene letras",
+      "Caracteres especiales / símbolos"
+    ],
+    "pro_telefono": [
+      "Teléfono"
+    ],
+    "pro_email": [
+      "Email"
+    ]
+  }
+}

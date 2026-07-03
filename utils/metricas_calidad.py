@@ -24,17 +24,6 @@ def longitud_mayor(df, columna, n):
     )
 
 
-def longitud_menor(df, columna, n):
-
-    return (
-        df[columna]
-        .astype(str)
-        .str.len()
-        .lt(n)
-        .sum()
-    )
-
-
 def contiene_numeros(df, columna):
 
     return (
@@ -71,16 +60,6 @@ def solo_letras(df, columna):
         df[columna]
         .astype(str)
         .str.isalpha()
-        .sum()
-    )
-
-
-def espacios_inicio_final(df, columna):
-
-    return (
-        df[columna]
-        .astype(str)
-        .apply(lambda x: x != x.strip())
         .sum()
     )
 

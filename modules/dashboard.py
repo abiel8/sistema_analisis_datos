@@ -5,6 +5,10 @@ from utils.sesion_archivo import obtener_dataframe_sesion
 from utils.condiciones_dashboard import TIPOS_VALIDACION
 from utils.graficos import grafico_pastel, grafico_pastel_con_cantidades, grafico_resumen_general, config_descarga_png
 from utils.excel_export import generar_excel_consolidado
+from utils.plantillas import (
+    guardar_plantilla_dashboard, cargar_plantilla_dashboard,
+    listar_plantillas, eliminar_plantilla, nombre_plantilla_existe
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -84,10 +88,77 @@ def mostrar_dashboard():
 
     st.subheader("Validación de todas las columnas")
 
+    # ── Plantillas ─────
+    plantillas_disponibles = listar_plantillas(tipo="dashboard")
+
+    with st.expander("Plantillas", expanded=False):
+
+        col_p1, col_p2, col_p3 = st.columns([3, 1, 1])
+
+        nombres_plantillas = [p["nombre"] for p in plantillas_disponibles]
+
+        if nombres_plantillas:
+
+            plantilla_elegida = col_p1.selectbox(
+                "Plantillas guardadas",
+                options=["— Seleccione una plantilla —"] + nombres_plantillas,
+                key="plantilla_seleccionada_dashboard"
+            )
+
+            if col_p2.button("Cargar", key="btn_cargar_plantilla", use_container_width=True):
+                if plantilla_elegida != "— Seleccione una plantilla —":
+                    asignaciones_plantilla = cargar_plantilla_dashboard(plantilla_elegida)
+                    if asignaciones_plantilla:
+                        st.session_state["plantilla_dashboard_activa"] = asignaciones_plantilla
+                        st.success(f"Plantilla '{plantilla_elegida}' cargada.")
+                        st.rerun()
+                    else:
+                        st.error("No se pudo cargar la plantilla.")
+
+            if col_p3.button("Eliminar", key="btn_eliminar_plantilla", use_container_width=True):
+                if plantilla_elegida != "— Seleccione una plantilla —":
+                    eliminar_plantilla(plantilla_elegida)
+                    st.session_state.pop("plantilla_dashboard_activa", None)
+                    st.success(f"Plantilla '{plantilla_elegida}' eliminada.")
+                    st.rerun()
+
+        else:
+            col_p1.caption("No hay plantillas guardadas aún.")
+
+        st.divider()
+
+        col_n1, col_n2 = st.columns([3, 1])
+        nombre_nueva_plantilla = col_n1.text_input(
+            "Nombre para guardar la configuración actual como plantilla",
+            placeholder="ej: Proveedores Zamorano",
+            key="nombre_nueva_plantilla_dashboard"
+        )
+
+        if col_n2.button("Guardar", key="btn_guardar_plantilla", use_container_width=True):
+            if nombre_nueva_plantilla.strip():
+                asignaciones_actuales = {
+                    col: st.session_state.get(f"tipos_validacion_{col}", [])
+                    for col in columnas
+                    if st.session_state.get(f"marcar_{col}", False)
+                    and st.session_state.get(f"tipos_validacion_{col}", [])
+                }
+                if asignaciones_actuales:
+                    ya_existe = nombre_plantilla_existe(nombre_nueva_plantilla.strip())
+                    guardar_plantilla_dashboard(nombre_nueva_plantilla.strip(), asignaciones_actuales)
+                    msg = "actualizada" if ya_existe else "guardada"
+                    st.success(f"Plantilla '{nombre_nueva_plantilla.strip()}' {msg}.")
+                    st.rerun()
+                else:
+                    st.warning("Configure al menos una columna con condiciones antes de guardar.")
+            else:
+                st.warning("Escriba un nombre para la plantilla.")
+
     st.caption("Marque las columnas que quiera analizar.")
 
-    # ── Grilla horizontal de checkboxes, una columna de Streamlit por cada
-    # columna del archivo, agrupadas en filas de máximo 5 ────────────────
+    # Plantilla activa: pre-marcar checkboxes y condiciones si hay una cargada
+    plantilla_activa = st.session_state.get("plantilla_dashboard_activa", {})
+
+    # ── Grilla horizontal de checkboxes ─────
     MAXIMO_POR_FILA = 5
     columnas_marcadas = []
 
@@ -98,7 +169,9 @@ def mostrar_dashboard():
 
         for col_streamlit, col in zip(cols_streamlit, bloque):
 
-            marcada = col_streamlit.checkbox(col, key=f"marcar_{col}")
+            # Si la plantilla activa incluye esta columna, pre-marcarla
+            pre_marcada = col in plantilla_activa
+            marcada = col_streamlit.checkbox(col, key=f"marcar_{col}", value=pre_marcada)
 
             if marcada:
                 columnas_marcadas.append(col)
@@ -113,7 +186,7 @@ def mostrar_dashboard():
     parametros_asignacion = {}
 
     if not columnas_marcadas:
-        st.info("Marque al menos una columna arriba para visualizar sus condiciones.")
+        st.info("Marque al menos una columna arriba para configurar sus condiciones.")
 
     for col in columnas_marcadas:
 
@@ -124,6 +197,7 @@ def mostrar_dashboard():
             tipos_elegidos = st.multiselect(
                 "Condiciones a evaluar",
                 options=opciones_tipo,
+                default=plantilla_activa.get(col, []),
                 key=f"tipos_validacion_{col}"
             )
 
@@ -316,6 +390,7 @@ def mostrar_dashboard():
             f"**Análisis completo:** {len(asignaciones)} columna(s) revisada(s), "
             f"{total_filas_con_error} registro(s) con algún error encontrado en total."
         )
+        
 
         if columnas_sin_ningun_error:
             st.caption(
@@ -332,7 +407,7 @@ def mostrar_dashboard():
 
             st.plotly_chart(fig_general, use_container_width=True, config=config)
             st.caption(
-                "Pase el cursor sobre el gráfico y use el ícono de cámara "
+                "Pase el cursor sobre el gráfico y use el ícono de cámara"
                 "en la barra superior para descargarlo como PNG."
             )
 
@@ -352,3 +427,4 @@ def mostrar_dashboard():
 
     elif ejecutar_analisis and not asignaciones:
         st.info("No marcó ninguna columna con condiciones de validación.")
+        
