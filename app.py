@@ -14,7 +14,7 @@ st.set_page_config(
 
 cargar_css("static/styles.css")
 
-# ── Logo en el área beige, arriba a la izquierda ────────────────
+# ── Logo en el área beige, arriba a la izquierda ───
 col_logo, col_titulo = st.columns([1, 4])
 
 with col_logo:

@@ -45,8 +45,6 @@ def mostrar_dashboard():
     st.subheader("Vista previa de datos")
     st.dataframe(df.head(10), use_container_width=True)
 
-    # Espacio reservado: el pastel "Bueno/Malo" se llena al final del
-    # análisis, pero se muestra aquí arriba, antes de todo lo demás
     placeholder_pastel_general = st.empty()
 
     # ── Filtrar antes de transformar ───────────────────────────
@@ -83,15 +81,17 @@ def mostrar_dashboard():
     columnas = df.columns.tolist()
 
     # ═══════════════════════════════════════════════════════════
-    # Sección: Validación por columna (todo el archivo de una vez)
+    # Sección: Validación por columna
     # ═══════════════════════════════════════════════════════════
 
     st.subheader("Validación de todas las columnas")
 
-    # ── Plantillas ─────
+    # ── Plantillas ──────────────────────────────────────────────
     plantillas_disponibles = listar_plantillas(tipo="dashboard")
 
-    with st.expander("Plantillas", expanded=False):
+    with st.container(border=True):
+
+        st.markdown("**Plantillas**")
 
         col_p1, col_p2, col_p3 = st.columns([3, 1, 1])
 
@@ -110,6 +110,7 @@ def mostrar_dashboard():
                     asignaciones_plantilla = cargar_plantilla_dashboard(plantilla_elegida)
                     if asignaciones_plantilla:
                         st.session_state["plantilla_dashboard_activa"] = asignaciones_plantilla
+                        st.session_state["auto_analizar_dashboard"] = True
                         st.success(f"Plantilla '{plantilla_elegida}' cargada.")
                         st.rerun()
                     else:
@@ -155,10 +156,9 @@ def mostrar_dashboard():
 
     st.caption("Marque las columnas que quiera analizar.")
 
-    # Plantilla activa: pre-marcar checkboxes y condiciones si hay una cargada
     plantilla_activa = st.session_state.get("plantilla_dashboard_activa", {})
 
-    # ── Grilla horizontal de checkboxes ─────
+    # ── Grilla horizontal de checkboxes ─────────────────────────
     MAXIMO_POR_FILA = 5
     columnas_marcadas = []
 
@@ -169,7 +169,6 @@ def mostrar_dashboard():
 
         for col_streamlit, col in zip(cols_streamlit, bloque):
 
-            # Si la plantilla activa incluye esta columna, pre-marcarla
             pre_marcada = col in plantilla_activa
             marcada = col_streamlit.checkbox(col, key=f"marcar_{col}", value=pre_marcada)
 
@@ -177,8 +176,6 @@ def mostrar_dashboard():
                 columnas_marcadas.append(col)
 
     st.divider()
-
-    # ── Configuración (groupbox) solo para las columnas marcadas ────────
 
     opciones_tipo = [t for t in TIPOS_VALIDACION.keys() if t != "Sin validar"]
 
@@ -226,14 +223,13 @@ def mostrar_dashboard():
 
     ejecutar_analisis = st.button("Analizar todas las columnas marcadas")
 
-    # Acumula el resultado de cada columna para la descarga consolidada
+    # Si se cargó una plantilla en el render anterior, disparar el análisis
+    # automáticamente sin necesidad de presionar el botón manualmente
+    if st.session_state.pop("auto_analizar_dashboard", False):
+        ejecutar_analisis = True
+
     resultados_para_excel = {}
-
-    # Acumula el % de error de cada columna para el gráfico general final
     resumen_porcentajes = []
-
-    # Acumula, a nivel de TODO el archivo, qué filas tuvieron error en
-    # al menos una de las columnas analizadas (para el pastel simple)
     mascara_alguna_columna_mala = pd.Series(False, index=df.index)
 
     if ejecutar_analisis and asignaciones:
@@ -276,8 +272,6 @@ def mostrar_dashboard():
                 if not mascaras_individuales:
                     continue
 
-                # Clasificar cada fila con la primera condición que cumple,
-                # en el orden en que el usuario las seleccionó
                 categoria_por_fila = pd.Series("Correcto", index=df.index)
 
                 for tipo, mascara in mascaras_individuales.items():
@@ -333,8 +327,6 @@ def mostrar_dashboard():
                 with st.expander(f"Ver filas de '{col}' ({len(df_mostrar)} filas)"):
                     st.dataframe(df_mostrar, use_container_width=True)
 
-                # Para el Excel final: solo las filas con error en ESTA
-                # columna específica (no las correctas), con la fila completa
                 resultados_para_excel[col] = df_con_categoria[
                     df_con_categoria["categoria_error"] != "Correcto"
                 ]
@@ -347,7 +339,10 @@ def mostrar_dashboard():
         barra_progreso.progress(1.0, text="Análisis completo.")
         barra_progreso.empty()
 
-        # ── Pastel simple arriba: % bueno vs % malo de todo el archivo ──
+        # Obtener nombre de hoja una sola vez
+        nombre_hoja = str(st.session_state.get("archivo_info", {}).get("hoja", "—"))
+
+        # ── Pastel simple arriba ────────────────────────────────
         cantidad_total_archivo = len(df)
         cantidad_filas_malas = int(mascara_alguna_columna_mala.sum())
         cantidad_filas_buenas = cantidad_total_archivo - cantidad_filas_malas
@@ -362,7 +357,7 @@ def mostrar_dashboard():
 
             fig_simple = grafico_pastel_con_cantidades(
                 df_pastel_general, "categoria", "cantidad",
-                titulo=f"Total de registros: {cantidad_total_archivo}"
+                titulo=f"Total de registros: {cantidad_total_archivo}  |  Hoja: {nombre_hoja}"
             )
 
             config_pastel_general = config_descarga_png("resultado_general")
@@ -379,7 +374,7 @@ def mostrar_dashboard():
                 "Use el ícono de cámara para descargar este gráfico como PNG."
             )
 
-        # ── Resumen claro de lo que se encontró, antes del detalle ─
+        # ── Resumen ─────────────────────────────────────────────
         total_filas_con_error = sum(len(df_res) for df_res in resultados_para_excel.values())
         columnas_sin_ningun_error = [
             fila["columna"] for fila in resumen_porcentajes
@@ -390,28 +385,30 @@ def mostrar_dashboard():
             f"**Análisis completo:** {len(asignaciones)} columna(s) revisada(s), "
             f"{total_filas_con_error} registro(s) con algún error encontrado en total."
         )
-        
 
         if columnas_sin_ningun_error:
             st.caption(
                 "Sin errores en: " + ", ".join(f"**{c}**" for c in columnas_sin_ningun_error)
             )
 
-        # ── Gráfico general: % de error por columna analizada ──────
+        # ── Gráfico de barras general ───────────────────────────
         if resumen_porcentajes:
 
             st.subheader("Resumen general")
 
-            fig_general = grafico_resumen_general(resumen_porcentajes)
+            fig_general = grafico_resumen_general(
+                resumen_porcentajes,
+                titulo_extra=f"Hoja: {nombre_hoja}"
+            )
             config = config_descarga_png("resumen_general_calidad_datos")
 
             st.plotly_chart(fig_general, use_container_width=True, config=config)
             st.caption(
-                "Pase el cursor sobre el gráfico y use el ícono de cámara"
+                "Pase el cursor sobre el gráfico y use el ícono de cámara "
                 "en la barra superior para descargarlo como PNG."
             )
 
-        # ── Descarga consolidada: un solo Excel, una hoja por columna ───
+        # ── Descarga consolidada ────────────────────────────────
         if resultados_para_excel:
 
             st.subheader("Descargar todo")
@@ -427,4 +424,3 @@ def mostrar_dashboard():
 
     elif ejecutar_analisis and not asignaciones:
         st.info("No marcó ninguna columna con condiciones de validación.")
-        

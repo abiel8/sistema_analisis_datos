@@ -31,21 +31,23 @@ def grafico_pastel_con_cantidades(df, nombres, valores, titulo=None):
 # Resumen general: comparación de % de error entre columnas
 # ═══════════════════════════════════════════════════════════════
 
-def grafico_resumen_general(resumen_porcentajes):
-    """resumen_porcentajes: lista de dicts [{'columna': ..., 'porcentaje_error': ...}, ...]"""
+def grafico_resumen_general(resumen_porcentajes, titulo_extra=None):
 
     df_resumen = pd.DataFrame(resumen_porcentajes)
+
+    titulo = "Porcentaje de error por columna analizada"
+    if titulo_extra:
+        titulo += f"  |  {titulo_extra}"
 
     return px.bar(
         df_resumen,
         x="columna",
         y="porcentaje_error",
-        title="Porcentaje de error por columna analizada",
+        title=titulo,
         labels={"columna": "Columna", "porcentaje_error": "Porcentaje con error (%)"},
         range_y=[0, 100],
         text="porcentaje_error"
     )
-
 
 def config_descarga_png(nombre_archivo):
     """Configuración estándar para que los gráficos de Plotly tengan el

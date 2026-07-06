@@ -1,0 +1,40 @@
+{
+  "tipo": "dashboard",
+  "nombre": "Clientes",
+  "fecha": "04/07/2026 09:49",
+  "asignaciones": {
+    "Cuenta Contable Larga": [
+      "Vacíos"
+    ],
+    "Cuenta Contable": [
+      "Vacíos"
+    ],
+    "Auxiliar": [
+      "Vacíos"
+    ],
+    "cli_codigo": [
+      "Vacíos"
+    ],
+    "cli_nombre": [
+      "Vacíos",
+      "Caracteres especiales / símbolos"
+    ],
+    "cli_direccion": [
+      "Vacíos",
+      "Caracteres especiales / símbolos"
+    ],
+    "cli_nit": [
+      "Vacíos",
+      "Contiene letras",
+      "Caracteres especiales / símbolos"
+    ],
+    "cli_email": [
+      "Email"
+    ],
+    "cli_telefono": [
+      "Vacíos",
+      "Contiene letras",
+      "Caracteres especiales / símbolos"
+    ]
+  }
+}
