@@ -146,10 +146,11 @@ def mostrar_calidad_datos():
         try:
             resultado_email = resumen_validacion_email(df, columna)
 
-            ce1, ce2, ce3 = st.columns(3)
+            ce1, ce2, ce3, ce4 = st.columns(4)
             ce1.metric("Total de registros", resultado_email["total"])
             ce2.metric("Válidos", resultado_email["validos"])
-            ce3.metric("Inválidos", resultado_email["invalidos"])
+            ce3.metric("Con formato incorrecto", resultado_email["invalidos"])
+            ce4.metric("Vacíos", resultado_email["vacios"])
 
             st.progress(resultado_email["porcentaje_validos"] / 100)
             st.caption(f"{resultado_email['porcentaje_validos']}% de correos válidos")
@@ -159,13 +160,15 @@ def mostrar_calidad_datos():
             df_detalle_email["diagnostico"] = resultado_email["detalle"]
 
             mostrar_solo_invalidos_email = st.checkbox(
-                "Mostrar solo los inválidos",
+                "Mostrar solo los que tienen formato incorrecto (excluye vacíos)",
                 value=True,
                 key="solo_invalidos_email"
             )
 
             if mostrar_solo_invalidos_email:
-                df_detalle_email = df_detalle_email[df_detalle_email["diagnostico"] != "Válido"]
+                df_detalle_email = df_detalle_email[
+                    ~df_detalle_email["diagnostico"].isin(["Válido", "Vacío"])
+                ]
 
             st.dataframe(df_detalle_email, use_container_width=True)
 
@@ -199,10 +202,11 @@ def mostrar_calidad_datos():
         try:
             resultado_tel = resumen_validacion_telefono_internacional(df, columna, "HN")
 
-            ct1, ct2, ct3 = st.columns(3)
+            ct1, ct2, ct3, ct4 = st.columns(4)
             ct1.metric("Total de registros", resultado_tel["total"])
             ct2.metric("Válidos", resultado_tel["validos"])
-            ct3.metric("Inválidos", resultado_tel["invalidos"])
+            ct3.metric("Con formato incorrecto", resultado_tel["invalidos"])
+            ct4.metric("Vacíos", resultado_tel["vacios"])
 
             st.progress(resultado_tel["porcentaje_validos"] / 100)
             st.caption(f"{resultado_tel['porcentaje_validos']}% de teléfonos válidos")
@@ -212,13 +216,15 @@ def mostrar_calidad_datos():
             df_detalle_tel["diagnostico"] = resultado_tel["detalle"]
 
             mostrar_solo_invalidos_tel = st.checkbox(
-                "Mostrar solo los inválidos",
+                "Mostrar solo los que tienen formato incorrecto (excluye vacíos)",
                 value=True,
                 key="solo_invalidos_telefono"
             )
 
             if mostrar_solo_invalidos_tel:
-                df_detalle_tel = df_detalle_tel[df_detalle_tel["diagnostico"] != "Válido"]
+                df_detalle_tel = df_detalle_tel[
+                    ~df_detalle_tel["diagnostico"].isin(["Válido", "Vacío"])
+                ]
 
             st.dataframe(df_detalle_tel, use_container_width=True)
 

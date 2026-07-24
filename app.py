@@ -8,7 +8,7 @@ from utils.estilos import cargar_css
 
 st.set_page_config(
     page_title="ZVMD",
-    page_icon="assets/logo.png",
+    page_icon="assets/icon.png",
     layout="wide"
 )
 
@@ -40,5 +40,6 @@ elif opcion == "Metodos":
 
 elif opcion == "Dashboard":
     mostrar_dashboard()
+    
     
     

@@ -127,11 +127,13 @@ def resumen_validacion_telefono_internacional(df, columna, region_default="HN"):
 
     total = len(diagnostico)
     validos = (diagnostico == "Válido").sum()
-    invalidos = total - validos
+    vacios = (diagnostico == "Vacío").sum()
+    invalidos = total - validos - vacios
 
     return {
         "total": total,
         "validos": validos,
+        "vacios": vacios,
         "invalidos": invalidos,
         "porcentaje_validos": round(validos / total * 100, 2) if total else 0,
         "detalle": diagnostico
@@ -139,7 +141,9 @@ def resumen_validacion_telefono_internacional(df, columna, region_default="HN"):
 
 
 def mascara_telefono_invalido(df, columna):
-    """Máscara booleana: True donde el teléfono NO es válido (nacional o
-    internacional, detección automática). Para TIPOS_VALIDACION."""
+    """Máscara booleana: True donde el teléfono tiene formato incorrecto
+    (nacional o internacional, detección automática). Los vacíos NO se
+    marcan (para eso está la condición "Vacíos" aparte). Para TIPOS_VALIDACION."""
 
-    return diagnosticar_columna_telefono_internacional(df, columna, "HN") != "Válido"
+    diagnostico = diagnosticar_columna_telefono_internacional(df, columna, "HN")
+    return ~diagnostico.isin(["Válido", "Vacío"])

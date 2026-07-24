@@ -55,11 +55,13 @@ def resumen_validacion_email(df, columna):
 
     total = len(diagnostico)
     validos = (diagnostico == "Válido").sum()
-    invalidos = total - validos
+    vacios = (diagnostico == "Vacío").sum()
+    invalidos = total - validos - vacios
 
     return {
         "total": total,
         "validos": validos,
+        "vacios": vacios,
         "invalidos": invalidos,
         "porcentaje_validos": round(validos / total * 100, 2) if total else 0,
         "detalle": diagnostico
@@ -67,7 +69,9 @@ def resumen_validacion_email(df, columna):
 
 
 def mascara_email_invalido(df, columna):
-    """Máscara booleana: True donde el email NO es válido. Para uso en
-    el catálogo de TIPOS_VALIDACION del dashboard."""
+    """Máscara booleana: True donde el email tiene formato incorrecto.
+    Los vacíos NO se marcan (para eso está la condición "Vacíos" aparte).
+    Para uso en el catálogo de TIPOS_VALIDACION del dashboard."""
 
-    return diagnosticar_columna_email(df, columna) != "Válido"
+    diagnostico = diagnosticar_columna_email(df, columna)
+    return ~diagnostico.isin(["Válido", "Vacío"])
